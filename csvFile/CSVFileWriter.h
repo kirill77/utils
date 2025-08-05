@@ -14,7 +14,7 @@
  * Allows for writing headers and rows of data to a CSV file with proper
  * formatting and handling of various data types.
  */
-class CSVFile
+class CSVFileWriter
 {
 public:
     /**
@@ -22,12 +22,12 @@ public:
      * @param filename The path to the CSV file to create or overwrite
      * @param headers The column headers for the CSV file
      */
-    CSVFile(const std::string& filename, const std::vector<std::string>& headers);
+    CSVFileWriter(const std::string& filename, const std::vector<std::string>& headers);
     
     /**
      * @brief Destructor that ensures the file is properly closed
      */
-    ~CSVFile();
+    ~CSVFileWriter();
     
     /**
      * @brief Add a row of string data to the CSV file
@@ -104,7 +104,7 @@ private:
 
 // Template implementation
 template<typename... Args>
-bool CSVFile::addMixedRow(const Args&... args)
+bool CSVFileWriter::addMixedRow(const Args&... args)
 {
     std::ostringstream row;
     int idx = 0;

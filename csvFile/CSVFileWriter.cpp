@@ -1,10 +1,10 @@
 #include "pch.h"
-#include "CSVFile.h"
+#include "CSVFileWriter.h"
 #include <fstream>
 #include <sstream>
 #include <iomanip>
 
-CSVFile::CSVFile(const std::string& filename, const std::vector<std::string>& headers)
+CSVFileWriter::CSVFileWriter(const std::string& filename, const std::vector<std::string>& headers)
     : m_filename(filename)
     , m_headers(headers)
 {
@@ -22,7 +22,7 @@ CSVFile::CSVFile(const std::string& filename, const std::vector<std::string>& he
     }
 }
 
-CSVFile::~CSVFile()
+CSVFileWriter::~CSVFileWriter()
 {
     // Ensure file is properly closed
     if (m_file.is_open()) {
@@ -30,7 +30,7 @@ CSVFile::~CSVFile()
     }
 }
 
-bool CSVFile::addRow(const std::vector<std::string>& values)
+bool CSVFileWriter::addRow(const std::vector<std::string>& values)
 {
     if (!isValid()) {
         return false;
@@ -49,7 +49,7 @@ bool CSVFile::addRow(const std::vector<std::string>& values)
     return writeRow(row.str());
 }
 
-bool CSVFile::addRow(const std::vector<double>& values)
+bool CSVFileWriter::addRow(const std::vector<double>& values)
 {
     if (!isValid()) {
         return false;
@@ -69,29 +69,29 @@ bool CSVFile::addRow(const std::vector<double>& values)
     return writeRow(row.str());
 }
 
-void CSVFile::flush()
+void CSVFileWriter::flush()
 {
     if (isValid()) {
         m_file.flush();
     }
 }
 
-bool CSVFile::isValid() const
+bool CSVFileWriter::isValid() const
 {
     return m_file.is_open() && m_file.good();
 }
 
-void CSVFile::setDelimiter(char delimiter)
+void CSVFileWriter::setDelimiter(char delimiter)
 {
     m_delimiter = delimiter;
 }
 
-void CSVFile::setPrecision(int precision)
+void CSVFileWriter::setPrecision(int precision)
 {
     m_precision = precision;
 }
 
-std::string CSVFile::escapeString(const std::string& str) const
+std::string CSVFileWriter::escapeString(const std::string& str) const
 {
     // If the string contains delimiter, newline, or quotes,
     // we need to escape it by enclosing in quotes and escaping quotes
@@ -120,7 +120,7 @@ std::string CSVFile::escapeString(const std::string& str) const
     return "\"" + escaped + "\"";
 }
 
-bool CSVFile::writeRow(const std::string& row)
+bool CSVFileWriter::writeRow(const std::string& row)
 {
     if (!isValid()) {
         return false;
