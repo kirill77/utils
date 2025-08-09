@@ -1,12 +1,13 @@
 #pragma once
 
-#include "utils/csvFile/CSVFile.h"
 #include "biology/organelles/Medium.h"
 #include "geometry/vectors/vector.h"
 #include <string>
 #include <vector>
 #include <memory>
 #include <unordered_map>
+
+class CSVFileWriter;
 
 /**
  * @class DataCollector
@@ -69,7 +70,7 @@ public:
 private:
     Medium& m_medium;                           // Reference to simulation medium
     std::string m_outputFile;                   // Path to the output CSV file
-    std::unique_ptr<CSVFile> m_csvFile;         // CSV file for output
+    std::shared_ptr<CSVFileWriter> m_csvFile;         // CSV file for output
     std::vector<CollectionPoint> m_collectionPoints;  // Points to collect data from
     double m_lastCollectionTime = 0.0;          // Last time data was collected
     double m_collectionInterval;                // How often to collect data

@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "DataCollector.h"
+#include "utils/csvFile/CSVFileWriter.h"
 
 DataCollector::DataCollector(Medium& medium, const std::string& outputFile, double collectionInterval)
     : m_medium(medium)
@@ -26,12 +27,12 @@ void DataCollector::addCollectionPoint(const float3& position, const std::string
     // Create or recreate the CSV file with updated headers
     if (!m_csvFile) {
         // First time creation
-        m_csvFile = std::make_unique<CSVFile>(m_outputFile, generateHeaders());
+        m_csvFile = std::make_shared<CSVFileWriter>(m_outputFile, generateHeaders());
         m_csvFile->setPrecision(6);
     } else {
         // Recreate with new headers
         std::string filename = m_outputFile;
-        m_csvFile = std::make_unique<CSVFile>(filename, generateHeaders());
+        m_csvFile = std::make_shared<CSVFileWriter>(filename, generateHeaders());
         m_csvFile->setPrecision(6);
         // Note: This will overwrite previous data
     }
