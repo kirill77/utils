@@ -23,7 +23,7 @@ bool FileUtils::findTheFolder(const std::string &sName, std::filesystem::path& _
         tmp.append(sName);
         if (std::filesystem::exists(tmp) && std::filesystem::is_directory(tmp))
         {
-            _path = tmp;
+            _path = tmp.lexically_normal(); // Normalize the found path
             return true;
         }
         tmp = path.parent_path();
@@ -47,17 +47,20 @@ bool FileUtils::findFile(const std::wstring &fileName, std::filesystem::path &pa
         GetModuleFileNameW(nullptr, &buffer[0], (DWORD)buffer.size());
         std::filesystem::path exePath = buffer;
         exePath.remove_filename();
+        exePath = exePath.lexically_normal(); // Normalize the executable path
         
-        // Add default search paths
+        // Add default search paths (normalized to resolve .. components)
         paths.push_back(exePath.wstring());
-        paths.push_back((exePath / L"..").wstring());
-        paths.push_back((exePath.parent_path() / L"../..").wstring());
+        paths.push_back((exePath / L"..").lexically_normal().wstring());
+        paths.push_back((exePath.parent_path() / L"../..").lexically_normal().wstring());
+        paths.push_back((exePath.parent_path() / L"../../..").lexically_normal().wstring());
     }
     
     // Search in each path
     for (const auto &searchPath : paths)
     {
         std::filesystem::path fullPath = std::filesystem::path(searchPath) / fileName;
+        fullPath = fullPath.lexically_normal(); // Normalize the full path
         if (std::filesystem::exists(fullPath) && std::filesystem::is_regular_file(fullPath))
         {
             path = fullPath;
