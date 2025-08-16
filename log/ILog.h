@@ -13,6 +13,7 @@ enum class LogLevel : unsigned
 struct ILog
 {
     static ILog* getInterface(const char *sName = nullptr);
+    static ILog* create(const std::string &sPath, const char *sName = nullptr);
 
     virtual void setTimeOverride(bool bOverride, std::time_t timeOverride) = 0;
     virtual void enableThreadAndFileInfo(bool bEnable) = 0;

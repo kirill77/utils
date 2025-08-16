@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <iostream>
 #include <vector>
+#include "utils/log/ILog.h"
 
 // Helper function to convert std::string to std::wstring (static to avoid linker collision)
 static std::wstring StringToWString(const std::string& str) {
@@ -65,7 +66,7 @@ ProcessManager::ProcessInfo ProcessManager::findProcessWithImage(const std::stri
 
 bool ProcessManager::killProcess(const ProcessInfo& processInfo) {
     if (!processInfo.isValid()) {
-        std::wcerr << L"Invalid process info provided" << std::endl;
+        LOG_ERROR("Invalid process info provided");
         return false;
     }
 
@@ -73,7 +74,7 @@ bool ProcessManager::killProcess(const ProcessInfo& processInfo) {
     HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, processInfo.id);
     if (hProcess == NULL) {
         DWORD error = GetLastError();
-        std::wcerr << L"Failed to open process " << processInfo.id << L" (" << StringToWString(processInfo.imageName).c_str() << L"). Error: " << error << std::endl;
+        LOG_ERROR("Failed to open process %u (%s). Error: %lu", processInfo.id, processInfo.imageName.c_str(), error);
         return false;
     }
 
@@ -83,11 +84,11 @@ bool ProcessManager::killProcess(const ProcessInfo& processInfo) {
 
     if (!result) {
         DWORD error = GetLastError();
-        std::wcerr << L"Failed to terminate process " << processInfo.id << L" (" << StringToWString(processInfo.imageName).c_str() << L"). Error: " << error << std::endl;
+        LOG_ERROR("Failed to terminate process %u (%s). Error: %lu", processInfo.id, processInfo.imageName.c_str(), error);
         return false;
     }
 
-    std::wcout << L"Successfully terminated process " << processInfo.id << L" (" << StringToWString(processInfo.imageName).c_str() << L")" << std::endl;
+    LOG_INFO("Successfully terminated process %u (%s)", processInfo.id, processInfo.imageName.c_str());
     return true;
 }
 
@@ -157,11 +158,11 @@ ProcessManager::ProcessInfo ProcessManager::startProcess(const std::string& sFul
 
     ProcessInfo processInfo(pi.dwProcessId, imageName);
     
-    std::wcout << L"Successfully started process: " << wsFullPath.c_str() << std::endl;
-    std::wcout << L"Process ID: " << processInfo.id << std::endl;
-    std::wcout << L"Image Name: " << StringToWString(processInfo.imageName).c_str() << std::endl;
-    std::wcout << L"Working Directory: " << (wsWorkingDir.empty() ? L"(current directory)" : wsWorkingDir.c_str()) << std::endl;
-    std::wcout << L"Thread ID: " << pi.dwThreadId << std::endl;
+    LOG_INFO("Successfully started process: %s", sFullPath.c_str());
+    LOG_INFO("Process ID: %u", processInfo.id);
+    LOG_INFO("Image Name: %s", processInfo.imageName.c_str());
+    LOG_INFO("Working Directory: %s", workingDir.empty() ? "(current directory)" : workingDir.c_str());
+    LOG_INFO("Thread ID: %lu", pi.dwThreadId);
 
     // Close process and thread handles as we don't need to wait for the process
     CloseHandle(pi.hProcess);
