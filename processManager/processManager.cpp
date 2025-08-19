@@ -1,6 +1,7 @@
 #include "ProcessManager.h"
 #include <windows.h>
 #include <tlhelp32.h>
+#include <shellapi.h>
 #include <string>
 #include <stdexcept>
 #include <iostream>
@@ -168,6 +169,71 @@ ProcessManager::ProcessInfo ProcessManager::startProcess(const std::string& sFul
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
+    return processInfo;
+}
+
+ProcessManager::ProcessInfo ProcessManager::startProcessElevated(const std::string& sFullPath, const std::string& sArguments) {
+    LOG_INFO("Starting process with elevation: %s", sFullPath.c_str());
+    
+    // Convert strings to wide strings
+    std::wstring wsFullPath = StringToWString(sFullPath);
+    std::wstring wsArguments = StringToWString(sArguments);
+    
+    // Extract working directory from the executable path
+    std::string workingDir = sFullPath;
+    size_t lastSlash = workingDir.find_last_of("/\\");
+    if (lastSlash != std::string::npos) {
+        workingDir = workingDir.substr(0, lastSlash);
+    } else {
+        workingDir.clear(); // Use current directory if no path separator found
+    }
+    std::wstring wsWorkingDir = workingDir.empty() ? std::wstring() : StringToWString(workingDir);
+    
+    // Setup ShellExecuteEx structure
+    SHELLEXECUTEINFOW sei = { sizeof(sei) };
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS;  // Keep process handle open so we can get process ID
+    sei.lpVerb = L"runas";                // Request elevation
+    sei.lpFile = wsFullPath.c_str();
+    sei.lpParameters = wsArguments.empty() ? nullptr : wsArguments.c_str();
+    sei.lpDirectory = wsWorkingDir.empty() ? nullptr : wsWorkingDir.c_str();
+    sei.nShow = SW_SHOW;
+    
+    // Launch the process with elevation
+    BOOL result = ShellExecuteExW(&sei);
+    
+    if (!result) {
+        DWORD error = GetLastError();
+        std::string errorMsg = "ShellExecuteEx failed for: " + sFullPath + 
+                              " with arguments: " + sArguments + 
+                              ". Error code: " + std::to_string(error);
+        throw std::runtime_error(errorMsg);
+    }
+    
+    // Get the process ID from the handle
+    DWORD processId = 0;
+    if (sei.hProcess != nullptr) {
+        processId = GetProcessId(sei.hProcess);
+        CloseHandle(sei.hProcess);  // Close handle as we don't need it anymore
+    }
+    
+    if (processId == 0) {
+        throw std::runtime_error("Failed to get process ID for elevated process: " + sFullPath);
+    }
+    
+    // Extract the executable name from the full path
+    std::string imageName = sFullPath;
+    size_t imageNameSlash = imageName.find_last_of("/\\");
+    if (imageNameSlash != std::string::npos) {
+        imageName = imageName.substr(imageNameSlash + 1);
+    }
+
+    ProcessInfo processInfo(processId, imageName);
+    
+    LOG_INFO("Successfully started elevated process: %s", sFullPath.c_str());
+    LOG_INFO("Process ID: %u", processInfo.id);
+    LOG_INFO("Image Name: %s", processInfo.imageName.c_str());
+    LOG_INFO("Working Directory: %s", workingDir.empty() ? "(current directory)" : workingDir.c_str());
+    
     return processInfo;
 }
 

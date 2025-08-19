@@ -25,6 +25,9 @@ public:
     // returns ProcessInfo of the started process
     ProcessInfo startProcess(const std::string& sFullPath, const std::string& sArguments);
     
+    // returns ProcessInfo of the started process with elevation (UAC prompt)
+    ProcessInfo startProcessElevated(const std::string& sFullPath, const std::string& sArguments);
+    
     // checks if a process is still running
     bool isProcessRunning(const ProcessInfo& processInfo);
 
