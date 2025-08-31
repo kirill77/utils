@@ -36,24 +36,34 @@ static std::string createLogFileName(const char *sName)
 
 struct MyLog : public ILog
 {
-    MyLog(const char *sName)
+    MyLog(const char *sPath, const char *sName = nullptr)
     {
-        if (!sName || sName[0] == '\0')
+        // Determine the log path: direct path takes priority over generated name
+        if (sPath && sPath[0] != '\0')
         {
-            AllocConsole();
-            SetConsoleTitleA("KirillLog");
-            m_outHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+            m_sLogPath = sPath;
         }
-        else
+        else if (sName && sName[0] != '\0')
         {
             m_sLogPath = createLogFileName(sName);
+        }
+        
+        // If we have a file path, create the log file
+        if (!m_sLogPath.empty())
+        {
             FILE* fp = nullptr;
-            // create the log name
             fopen_s(&fp, m_sLogPath.c_str(), "wt");
             if (fp)
             {
                 fclose(fp);
             }
+        }
+        else
+        {
+            // Console logging (no path specified)
+            AllocConsole();
+            SetConsoleTitleA("KirillLog");
+            m_outHandle = GetStdHandle(STD_OUTPUT_HANDLE);
         }
     }
 
@@ -170,21 +180,51 @@ private:
 
 static std::unordered_map<std::string, ILog*> m_pLogs;
 static ILog* g_pInterface = nullptr;
+static std::mutex g_logMapMutex;
 
 ILog* ILog::getInterface(const char *sName)
 {
+    std::lock_guard<std::mutex> lock(g_logMapMutex);
+    
     if (sName && sName[0] != '\0')
     {
         auto it = m_pLogs.find(sName);
         if (it != m_pLogs.end())
             return it->second;
-        ILog *pLog = new MyLog(sName);
+        ILog *pLog = new MyLog(nullptr, sName);
         m_pLogs[sName] = pLog;
         return pLog;
     }
     if (g_pInterface == nullptr)
     {
-        g_pInterface = new MyLog("");
+        g_pInterface = new MyLog(nullptr, nullptr);
     }
+    return g_pInterface;
+}
+
+ILog* ILog::create(const std::string &sPath, const char *sName)
+{
+    std::lock_guard<std::mutex> lock(g_logMapMutex);
+
+    if (sName && sName[0] != '\0')
+    {
+        // Check if a log with this key already exists
+        auto it = m_pLogs.find(sName);
+        if (it != m_pLogs.end())
+        {
+            assert(false); // why there are two calls to ILog::create()
+            return it->second;
+        }
+        // Create new log instance using the unified constructor
+        ILog* pLog = new MyLog(sPath.c_str(), sName);
+        m_pLogs[sName] = pLog;
+        return pLog;
+    }
+    if (g_pInterface)
+    {
+        assert(false); // why there are two calls to ILog::create()
+        return g_pInterface;
+    }
+    g_pInterface = new MyLog(sPath.c_str(), sName);
     return g_pInterface;
 }
