@@ -71,7 +71,7 @@ void DataCollector::collectData(double currentTime, double stepTimeMs)
     for (const auto& point : m_collectionPoints) {
         // For each protein at this point
         for (const auto& protein : point.proteins) {
-            double concentration = m_medium.getProteinNumber(protein, point.position);
+            double concentration = m_medium.getMoleculeNumber(Molecule(protein, ChemicalType::PROTEIN), point.position);
             dataRow.push_back(concentration);
         }
     }
