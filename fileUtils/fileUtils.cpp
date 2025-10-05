@@ -5,6 +5,7 @@
 #include <filesystem>
 #include "framework.h"
 #include "fileUtils.h"
+#include "utils/timeUtils/timeUtils.h"
 
 bool FileUtils::findTheFolder(const std::string &sName, std::filesystem::path& _path)
 {
@@ -35,7 +36,7 @@ bool FileUtils::findTheFolder(const std::string &sName, std::filesystem::path& _
     }
 }
 
-bool FileUtils::findFile(const std::wstring &fileName, std::filesystem::path &path, const std::vector<std::wstring> &searchPaths)
+bool FileUtils::findTheFile(const std::wstring &fileName, std::filesystem::path &path, const std::vector<std::wstring> &searchPaths)
 {
     // If no search paths provided, use default paths
     std::vector<std::wstring> paths = searchPaths;
@@ -69,4 +70,19 @@ bool FileUtils::findFile(const std::wstring &fileName, std::filesystem::path &pa
     }
     
     return false;
+}
+
+bool FileUtils::getOrCreateSubFolderUsingTimestamp(const std::string &baseFolder, std::filesystem::path &outPath)
+{
+    std::filesystem::path basePath;
+    if (!findTheFolder(baseFolder, basePath)) {
+        return false;
+    }
+
+    // Build timestamp folder name using TimeUtils (UTC to be stable across locales)
+    const std::time_t now = std::time(nullptr);
+    const std::string ts = TimeUtils::timeStampToString(now, "%Y%m%d_%H%M%S");
+    outPath = basePath / ts;
+    std::filesystem::create_directories(outPath);
+    return true;
 }
