@@ -79,10 +79,18 @@ bool FileUtils::getOrCreateSubFolderUsingTimestamp(const std::string &baseFolder
         return false;
     }
 
-    // Build timestamp folder name using TimeUtils (UTC to be stable across locales)
-    const std::time_t now = std::time(nullptr);
-    const std::string ts = TimeUtils::timeStampToString(now, "%Y%m%d_%H%M%S");
-    outPath = basePath / ts;
-    std::filesystem::create_directories(outPath);
+    // Cache the first timestamp used for this process so all calls use the same run folder
+    static std::string s_cachedTimestamp;
+    static bool s_timestampInitialized = false;
+    if (!s_timestampInitialized)
+    {
+        const std::time_t now = std::time(nullptr);
+        s_cachedTimestamp = TimeUtils::timeStampToString(now, "%Y%m%d_%H%M%S");
+        s_timestampInitialized = true;
+    }
+
+    outPath = (basePath / s_cachedTimestamp).lexically_normal();
+    std::error_code ec;
+    std::filesystem::create_directories(outPath, ec); // ignore if already exists
     return true;
 }
