@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <ctime>
+#include <string>
 
 enum class LogLevel : unsigned
 {
