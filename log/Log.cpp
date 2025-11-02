@@ -76,6 +76,22 @@ struct MyLog : public ILog
     {
         m_bEnableThreadAndFileInfo = bEnable;
     }
+    virtual void enableConsoleOutput(bool bEnable) override
+    {
+        if (bEnable && m_outHandle == nullptr)
+        {
+            // Initialize console if enabling and not already initialized
+            AllocConsole();
+            SetConsoleTitleA("KirillLog");
+            m_outHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+        }
+        else if (!bEnable && m_outHandle != nullptr && !m_sLogPath.empty())
+        {
+            // Disable console output (only if we have a log file, don't disable console-only mode)
+            FreeConsole();
+            m_outHandle = nullptr;
+        }
+    }
     virtual void logva(LogLevel level, const char* sFile, unsigned uLine, const char* , const char* fmt, ...) override
     {
         va_list args;
@@ -130,33 +146,9 @@ private:
         }
 
         std::lock_guard<std::mutex> lock(m_mutex);
-        if (m_sLogPath.size() == 0)
-        {
-            // Set attribute for newly written text
-            {
-                switch (level)
-                {
-                case LogLevel::eInfo:
-                    SetConsoleTextAttribute(m_outHandle, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
-                    break;
-                case LogLevel::eWarning:
-                    SetConsoleTextAttribute(m_outHandle, FOREGROUND_GREEN | FOREGROUND_RED);
-                    break;
-                case LogLevel::eError:
-                    SetConsoleTextAttribute(m_outHandle, FOREGROUND_RED);
-                    break;
-                default:
-                    assert(false);
-                }
-                DWORD OutChars;
-                WriteConsoleA(m_outHandle, finalMessage.c_str(), (DWORD)finalMessage.length(), &OutChars, nullptr);
-                if (level != LogLevel::eInfo)
-                {
-                    SetConsoleTextAttribute(m_outHandle, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
-                }
-            }
-        }
-        else
+        
+        // Write to file if path is specified
+        if (m_sLogPath.size() > 0)
         {
             FILE* fp = nullptr;
             fopen_s(&fp, m_sLogPath.c_str(), "a+");
@@ -164,6 +156,32 @@ private:
             {
                 fprintf(fp, "%s", finalMessage.c_str());
                 fclose(fp);
+            }
+        }
+        
+        // Write to console if handle is initialized
+        if (m_outHandle != nullptr)
+        {
+            // Set attribute for newly written text
+            switch (level)
+            {
+            case LogLevel::eInfo:
+                SetConsoleTextAttribute(m_outHandle, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
+                break;
+            case LogLevel::eWarning:
+                SetConsoleTextAttribute(m_outHandle, FOREGROUND_GREEN | FOREGROUND_RED);
+                break;
+            case LogLevel::eError:
+                SetConsoleTextAttribute(m_outHandle, FOREGROUND_RED);
+                break;
+            default:
+                assert(false);
+            }
+            DWORD OutChars;
+            WriteConsoleA(m_outHandle, finalMessage.c_str(), (DWORD)finalMessage.length(), &OutChars, nullptr);
+            if (level != LogLevel::eInfo)
+            {
+                SetConsoleTextAttribute(m_outHandle, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
             }
         }
     }

@@ -18,6 +18,7 @@ struct ILog
 
     virtual void setTimeOverride(bool bOverride, std::time_t timeOverride) = 0;
     virtual void enableThreadAndFileInfo(bool bEnable) = 0;
+    virtual void enableConsoleOutput(bool bEnable) = 0;
     virtual void logva(LogLevel level, const char* sFile, unsigned uLine, const char* func, const char* fmt, ...) = 0;
     virtual void shutdown() = 0;
 };
