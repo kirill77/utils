@@ -51,11 +51,11 @@ struct MyLog : public ILog
         // If we have a file path, create the log file
         if (!m_sLogPath.empty())
         {
-            FILE* fp = nullptr;
-            fopen_s(&fp, m_sLogPath.c_str(), "wt");
-            if (fp)
+            FILE* pFile = nullptr;
+            fopen_s(&pFile, m_sLogPath.c_str(), "wt");
+            if (pFile)
             {
-                fclose(fp);
+                fclose(pFile);
             }
         }
         else
@@ -63,7 +63,7 @@ struct MyLog : public ILog
             // Console logging (no path specified)
             AllocConsole();
             SetConsoleTitleA("KirillLog");
-            m_outHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+            m_pOutHandle = GetStdHandle(STD_OUTPUT_HANDLE);
         }
     }
 
@@ -78,18 +78,18 @@ struct MyLog : public ILog
     }
     virtual void enableConsoleOutput(bool bEnable) override
     {
-        if (bEnable && m_outHandle == nullptr)
+        if (bEnable && m_pOutHandle == nullptr)
         {
             // Initialize console if enabling and not already initialized
             AllocConsole();
             SetConsoleTitleA("KirillLog");
-            m_outHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+            m_pOutHandle = GetStdHandle(STD_OUTPUT_HANDLE);
         }
-        else if (!bEnable && m_outHandle != nullptr && !m_sLogPath.empty())
+        else if (!bEnable && m_pOutHandle != nullptr && !m_sLogPath.empty())
         {
             // Disable console output (only if we have a log file, don't disable console-only mode)
             FreeConsole();
-            m_outHandle = nullptr;
+            m_pOutHandle = nullptr;
         }
     }
     virtual void logva(LogLevel level, const char* sFile, unsigned uLine, const char* , const char* fmt, ...) override
@@ -150,43 +150,43 @@ private:
         // Write to file if path is specified
         if (m_sLogPath.size() > 0)
         {
-            FILE* fp = nullptr;
-            fopen_s(&fp, m_sLogPath.c_str(), "a+");
-            if (fp)
+            FILE* pFile = nullptr;
+            fopen_s(&pFile, m_sLogPath.c_str(), "a+");
+            if (pFile)
             {
-                fprintf(fp, "%s", finalMessage.c_str());
-                fclose(fp);
+                fprintf(pFile, "%s", finalMessage.c_str());
+                fclose(pFile);
             }
         }
         
         // Write to console if handle is initialized
-        if (m_outHandle != nullptr)
+        if (m_pOutHandle != nullptr)
         {
             // Set attribute for newly written text
             switch (level)
             {
             case LogLevel::eInfo:
-                SetConsoleTextAttribute(m_outHandle, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
+                SetConsoleTextAttribute(m_pOutHandle, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
                 break;
             case LogLevel::eWarning:
-                SetConsoleTextAttribute(m_outHandle, FOREGROUND_GREEN | FOREGROUND_RED);
+                SetConsoleTextAttribute(m_pOutHandle, FOREGROUND_GREEN | FOREGROUND_RED);
                 break;
             case LogLevel::eError:
-                SetConsoleTextAttribute(m_outHandle, FOREGROUND_RED);
+                SetConsoleTextAttribute(m_pOutHandle, FOREGROUND_RED);
                 break;
             default:
                 assert(false);
             }
             DWORD OutChars;
-            WriteConsoleA(m_outHandle, finalMessage.c_str(), (DWORD)finalMessage.length(), &OutChars, nullptr);
+            WriteConsoleA(m_pOutHandle, finalMessage.c_str(), (DWORD)finalMessage.length(), &OutChars, nullptr);
             if (level != LogLevel::eInfo)
             {
-                SetConsoleTextAttribute(m_outHandle, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
+                SetConsoleTextAttribute(m_pOutHandle, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
             }
         }
     }
 
-    HANDLE m_outHandle = nullptr;
+    HANDLE m_pOutHandle = nullptr;
     std::mutex m_mutex;
     std::string m_sLogPath;
 
