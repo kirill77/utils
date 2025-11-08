@@ -3,12 +3,20 @@
 #include <windows.h>
 #include <ctime>
 #include <string>
+#include <memory>
 
 enum class LogLevel : unsigned
 {
     eInfo,
     eWarning,
     eError
+};
+
+// Observer interface for log messages
+struct ILogObserver
+{
+    virtual ~ILogObserver() = default;
+    virtual void onLogMessage(LogLevel level, const std::string& message, const std::string& timestamp) = 0;
 };
 
 struct ILog
@@ -21,6 +29,10 @@ struct ILog
     virtual void enableConsoleOutput(bool bEnable) = 0;
     virtual void logva(LogLevel level, const char* sFile, unsigned uLine, const char* func, const char* fmt, ...) = 0;
     virtual void shutdown() = 0;
+
+    // Observer pattern methods
+    virtual void addObserver(std::shared_ptr<ILogObserver> pObserver) = 0;
+    virtual void removeObserver(std::shared_ptr<ILogObserver> pObserver) = 0;
 };
 
 #define LOG_INFO(fmt,...) ILog::getInterface()->logva(LogLevel::eInfo, __FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__)

@@ -6,6 +6,8 @@
 #include <assert.h>
 #include <unordered_map>
 #include <mutex>
+#include <vector>
+#include <algorithm>
 #include "utils/fileUtils/fileUtils.h"
 #include "utils/timeUtils/timeUtils.h"
 #include "framework.h"
@@ -125,6 +127,28 @@ struct MyLog : public ILog
     {
     }
 
+    // Observer pattern implementation
+    virtual void addObserver(std::shared_ptr<ILogObserver> pObserver) override
+    {
+        if (!pObserver) return;
+        std::lock_guard<std::mutex> lock(m_observerMutex);
+        m_observers.push_back(pObserver);
+    }
+
+    virtual void removeObserver(std::shared_ptr<ILogObserver> pObserver) override
+    {
+        if (!pObserver) return;
+        std::lock_guard<std::mutex> lock(m_observerMutex);
+        m_observers.erase(
+            std::remove_if(m_observers.begin(), m_observers.end(),
+                [&pObserver](const std::weak_ptr<ILogObserver>& wp) {
+                    auto sp = wp.lock();
+                    return !sp || sp == pObserver;
+                }),
+            m_observers.end()
+        );
+    }
+
 private:
 
     void print(LogLevel level, const char *sFile, unsigned uLine, const std::string& logMessage)
@@ -184,6 +208,31 @@ private:
                 SetConsoleTextAttribute(m_pOutHandle, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
             }
         }
+
+        // Notify observers (with automatic cleanup of expired weak_ptrs)
+        notifyObservers(level, logMessage, sTime);
+    }
+
+    void notifyObservers(LogLevel level, const std::string& message, const std::string& timestamp)
+    {
+        std::lock_guard<std::mutex> lock(m_observerMutex);
+        
+        // Notify all valid observers and remove expired ones
+        auto it = m_observers.begin();
+        while (it != m_observers.end())
+        {
+            if (auto pObserver = it->lock())
+            {
+                // Observer is still alive, notify it
+                pObserver->onLogMessage(level, message, timestamp);
+                ++it;
+            }
+            else
+            {
+                // Observer has been destroyed, remove from list
+                it = m_observers.erase(it);
+            }
+        }
     }
 
     HANDLE m_pOutHandle = nullptr;
@@ -194,6 +243,10 @@ private:
     std::time_t m_timeOverride = 0;
 
     bool m_bEnableThreadAndFileInfo = true;
+
+    // Observer pattern members
+    std::vector<std::weak_ptr<ILogObserver>> m_observers;
+    std::mutex m_observerMutex;
 };
 
 static std::unordered_map<std::string, ILog*> m_pLogs;
