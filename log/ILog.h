@@ -30,6 +30,10 @@ struct ILog
     virtual void logva(LogLevel level, const char* sFile, unsigned uLine, const char* func, const char* fmt, ...) = 0;
     virtual void shutdown() = 0;
 
+    // Log level filtering
+    virtual void setLogLevel(LogLevel minLevel) = 0;
+    virtual LogLevel getLogLevel() const = 0;
+
     // Observer pattern methods
     virtual void addObserver(std::shared_ptr<ILogObserver> pObserver) = 0;
     virtual void removeObserver(std::shared_ptr<ILogObserver> pObserver) = 0;

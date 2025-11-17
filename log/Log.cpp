@@ -94,8 +94,29 @@ struct MyLog : public ILog
             m_pOutHandle = nullptr;
         }
     }
+    
+	virtual void setLogLevel(LogLevel minLevel) override
+	{
+		m_minLogLevel = minLevel;
+	}
+	
+	virtual LogLevel getLogLevel() const override
+	{
+		return m_minLogLevel;
+	}
+    
     virtual void logva(LogLevel level, const char* sFile, unsigned uLine, const char* , const char* fmt, ...) override
     {
+        // Filter messages below the minimum log level
+        // Note: Reading m_minLogLevel without a lock is safe because:
+        // 1. Reading an enum is atomic on all modern architectures
+        // 2. Worst case: we read a stale value and filter one message incorrectly
+        // 3. Performance: avoiding mutex overhead on every log call is critical
+        if (static_cast<unsigned>(level) < static_cast<unsigned>(m_minLogLevel))
+        {
+            return;  // Skip this message
+        }
+        
         va_list args;
         va_start(args, fmt);
         std::string msg;
@@ -236,13 +257,16 @@ private:
     }
 
     HANDLE m_pOutHandle = nullptr;
-    std::mutex m_mutex;
+    mutable std::mutex m_mutex;
     std::string m_sLogPath;
 
     bool m_bTimeOverride = false;
     std::time_t m_timeOverride = 0;
 
     bool m_bEnableThreadAndFileInfo = true;
+    
+    // Log level filtering (default: show all messages)
+    LogLevel m_minLogLevel = LogLevel::eInfo;
 
     // Observer pattern members
     std::vector<std::weak_ptr<ILogObserver>> m_observers;
