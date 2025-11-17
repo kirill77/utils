@@ -210,6 +210,9 @@ private:
             // Set attribute for newly written text
             switch (level)
             {
+            case LogLevel::eVerbose:
+                SetConsoleTextAttribute(m_pOutHandle, FOREGROUND_BLUE | FOREGROUND_GREEN); // Cyan for verbose
+                break;
             case LogLevel::eInfo:
                 SetConsoleTextAttribute(m_pOutHandle, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
                 break;
