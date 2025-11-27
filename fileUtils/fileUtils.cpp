@@ -72,6 +72,22 @@ bool FileUtils::findTheFile(const std::wstring &fileName, std::filesystem::path 
     return false;
 }
 
+// Static storage for session timestamp (shared across all uses)
+static std::time_t s_cachedRawTimestamp = 0;
+static std::string s_cachedTimestampString;
+static bool s_timestampInitialized = false;
+
+std::time_t FileUtils::getSessionTimestamp()
+{
+    if (!s_timestampInitialized)
+    {
+        s_cachedRawTimestamp = std::time(nullptr);
+        s_cachedTimestampString = TimeUtils::timeStampToString(s_cachedRawTimestamp, "%Y%m%d_%H%M%S");
+        s_timestampInitialized = true;
+    }
+    return s_cachedRawTimestamp;
+}
+
 bool FileUtils::getOrCreateSubFolderUsingTimestamp(const std::string &baseFolder, std::filesystem::path &outPath)
 {
     std::filesystem::path basePath;
@@ -79,17 +95,10 @@ bool FileUtils::getOrCreateSubFolderUsingTimestamp(const std::string &baseFolder
         return false;
     }
 
-    // Cache the first timestamp used for this process so all calls use the same run folder
-    static std::string s_cachedTimestamp;
-    static bool s_timestampInitialized = false;
-    if (!s_timestampInitialized)
-    {
-        const std::time_t now = std::time(nullptr);
-        s_cachedTimestamp = TimeUtils::timeStampToString(now, "%Y%m%d_%H%M%S");
-        s_timestampInitialized = true;
-    }
+    // Ensure timestamp is initialized (uses shared static storage)
+    getSessionTimestamp();
 
-    outPath = (basePath / s_cachedTimestamp).lexically_normal();
+    outPath = (basePath / s_cachedTimestampString).lexically_normal();
     std::error_code ec;
     std::filesystem::create_directories(outPath, ec); // ignore if already exists
     return true;
