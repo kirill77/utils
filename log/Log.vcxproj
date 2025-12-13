@@ -82,6 +82,7 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
+      <LinkIncremental>false</LinkIncremental>
       <SubSystem>
       </SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -100,6 +101,7 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
+      <LinkIncremental>false</LinkIncremental>
       <SubSystem>
       </SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -118,6 +120,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
+      <LinkIncremental>false</LinkIncremental>
       <SubSystem>
       </SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -137,6 +140,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
+      <LinkIncremental>false</LinkIncremental>
       <SubSystem>
       </SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>

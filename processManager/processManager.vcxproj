@@ -86,6 +86,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
+      <LinkIncremental>false</LinkIncremental>
       <SubSystem>
       </SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -103,6 +104,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
+      <LinkIncremental>false</LinkIncremental>
       <SubSystem>
       </SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -122,6 +124,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
+      <LinkIncremental>false</LinkIncremental>
       <SubSystem>
       </SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -141,6 +144,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
+      <LinkIncremental>false</LinkIncremental>
       <SubSystem>
       </SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
