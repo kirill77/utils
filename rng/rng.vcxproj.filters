@@ -11,11 +11,17 @@
         </Filter>
     </ItemGroup>
     <ItemGroup>
+        <ClInclude Include="RNG.h">
+            <Filter>Header Files</Filter>
+        </ClInclude>
         <ClInclude Include="RNGSobol.h">
             <Filter>Header Files</Filter>
         </ClInclude>
     </ItemGroup>
     <ItemGroup>
+        <ClCompile Include="RNG.cpp">
+            <Filter>Source Files</Filter>
+        </ClCompile>
         <ClCompile Include="RNGSobol.cpp">
             <Filter>Source Files</Filter>
         </ClCompile>

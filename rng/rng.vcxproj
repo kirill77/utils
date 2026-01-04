@@ -143,9 +143,11 @@
         </Link>
     </ItemDefinitionGroup>
     <ItemGroup>
+        <ClInclude Include="RNG.h" />
         <ClInclude Include="RNGSobol.h" />
     </ItemGroup>
     <ItemGroup>
+        <ClCompile Include="RNG.cpp" />
         <ClCompile Include="RNGSobol.cpp" />
     </ItemGroup>
     <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
