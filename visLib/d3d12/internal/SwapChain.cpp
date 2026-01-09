@@ -1,8 +1,8 @@
 #ifdef _WIN32
 
-#include "utils/visLib/d3d12/internal/D3D12Common.h"
-#include "utils/visLib/d3d12/internal/SwapChain.h"
-#include "utils/visLib/d3d12/internal/DirectXHelpers.h"
+#include "D3D12Common.h"
+#include "SwapChain.h"
+#include "DirectXHelpers.h"
 #include <dxgi1_6.h>
 #include <stdexcept>
 

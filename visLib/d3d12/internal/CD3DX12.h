@@ -8,7 +8,7 @@
 
 #ifdef _WIN32
 
-#include "utils/visLib/d3d12/internal/D3D12Common.h"
+#include "D3D12Common.h"
 
 //=============================================================================
 // CD3DX12_HEAP_PROPERTIES

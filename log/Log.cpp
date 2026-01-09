@@ -1,7 +1,6 @@
 // Log.cpp : Defines the functions for the static library.
 //
 
-#include "Common.h"
 #include <string>
 #include <assert.h>
 #include <unordered_map>

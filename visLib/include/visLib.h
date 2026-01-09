@@ -12,17 +12,17 @@
 //   etc.
 
 // Types and math
-#include "utils/visLib/include/Types.h"
+#include "Types.h"
 
 // Core interfaces
-#include "utils/visLib/include/IRenderer.h"
-#include "utils/visLib/include/IWindow.h"
-#include "utils/visLib/include/IMesh.h"
-#include "utils/visLib/include/IFont.h"
-#include "utils/visLib/include/IText.h"
-#include "utils/visLib/include/IVisObject.h"
+#include "IRenderer.h"
+#include "IWindow.h"
+#include "IMesh.h"
+#include "IFont.h"
+#include "IText.h"
+#include "IVisObject.h"
 
 // Value types
-#include "utils/visLib/include/Camera.h"
-#include "utils/visLib/include/MeshNode.h"
-#include "utils/visLib/include/InputState.h"
+#include "Camera.h"
+#include "MeshNode.h"
+#include "InputState.h"

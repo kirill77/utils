@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Common.h">
+    <ClInclude Include="WindowsCompat.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="fileUtils.h">

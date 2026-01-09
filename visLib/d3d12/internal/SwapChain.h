@@ -2,8 +2,8 @@
 
 #ifdef _WIN32
 
-#include "utils/visLib/d3d12/internal/D3D12Common.h"
-#include "utils/visLib/d3d12/internal/GPUQueue.h"
+#include "D3D12Common.h"
+#include "GPUQueue.h"
 
 namespace visLib {
 namespace d3d12 {

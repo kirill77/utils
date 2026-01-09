@@ -2,8 +2,8 @@
 
 #ifdef _WIN32
 
-#include "utils/visLib/d3d12/internal/D3D12Common.h"
-#include "utils/visLib/d3d12/internal/CD3DX12.h"
+#include "D3D12Common.h"
+#include "CD3DX12.h"
 #include <exception>
 #include <string>
 

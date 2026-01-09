@@ -2,7 +2,7 @@
 
 #ifdef _WIN32
 
-#include "utils/visLib/d3d12/internal/D3D12Common.h"
+#include "D3D12Common.h"
 
 namespace visLib {
 namespace d3d12 {

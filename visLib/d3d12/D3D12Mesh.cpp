@@ -1,7 +1,7 @@
 #ifdef _WIN32
 
 #include "utils/visLib/d3d12/internal/D3D12Common.h"
-#include "utils/visLib/d3d12/D3D12Mesh.h"
+#include "D3D12Mesh.h"
 #include "utils/visLib/d3d12/internal/DirectXHelpers.h"
 #include "utils/visLib/d3d12/internal/CD3DX12.h"
 #include <stdexcept>

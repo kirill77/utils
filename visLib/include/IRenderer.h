@@ -1,7 +1,7 @@
 #pragma once
 
-#include "utils/visLib/include/Types.h"
-#include "utils/visLib/include/Camera.h"
+#include "Types.h"
+#include "Camera.h"
 #include <memory>
 #include <cstdint>
 

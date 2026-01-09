@@ -4,7 +4,7 @@
 
 #include "utils/visLib/d3d12/internal/D3D12Common.h"
 #include "utils/visLib/include/IText.h"
-#include "utils/visLib/d3d12/D3D12Font.h"
+#include "D3D12Font.h"
 #include <vector>
 #include <ctime>
 

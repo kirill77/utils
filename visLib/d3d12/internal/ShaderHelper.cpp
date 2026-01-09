@@ -1,8 +1,8 @@
 #ifdef _WIN32
 
-#include "utils/visLib/d3d12/internal/D3D12Common.h"
-#include "utils/visLib/d3d12/internal/ShaderHelper.h"
-#include "utils/visLib/d3d12/internal/DirectXHelpers.h"
+#include "D3D12Common.h"
+#include "ShaderHelper.h"
+#include "DirectXHelpers.h"
 #include <fstream>
 #include <vector>
 #include <d3dcompiler.h>

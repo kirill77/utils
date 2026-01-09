@@ -1,7 +1,7 @@
 #ifdef _WIN32
 
 #include "utils/visLib/d3d12/internal/D3D12Common.h"
-#include "utils/visLib/d3d12/D3D12InputState.h"
+#include "D3D12InputState.h"
 
 namespace visLib {
 namespace d3d12 {

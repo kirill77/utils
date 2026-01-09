@@ -1,4 +1,4 @@
-#include "Common.h"
+#include "WindowsCompat.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <string>

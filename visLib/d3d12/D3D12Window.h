@@ -4,7 +4,7 @@
 
 #include "utils/visLib/d3d12/internal/D3D12Common.h"
 #include "utils/visLib/include/IWindow.h"
-#include "utils/visLib/d3d12/D3D12InputState.h"
+#include "D3D12InputState.h"
 #include "utils/visLib/d3d12/internal/SwapChain.h"
 #include <memory>
 

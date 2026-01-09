@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utils/visLib/include/MeshNode.h"
+#include "MeshNode.h"
 #include <memory>
 
 namespace visLib {

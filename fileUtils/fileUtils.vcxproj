@@ -147,7 +147,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="fileUtils.h" />
-    <ClInclude Include="Common.h" />
+    <ClInclude Include="WindowsCompat.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="fileUtils.cpp" />
