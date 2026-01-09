@@ -98,24 +98,34 @@ bool Camera::fitBoxToView(const box3& boxToFit)
 
 affine3 Camera::getCameraTransform() const
 {
+    // Calculate camera basis vectors
     float3 right = getRight();
     float3 trueUp = cross(right, m_direction);
 
-    // Camera-to-world transform: columns are right, up, forward, position
-    return affine3::from_cols(right, trueUp, m_direction, m_position);
+    // Camera-to-world transform: row vectors (same convention as old GPUCamera)
+    affine3 transform;
+    transform.m_linear = float3x3(right, trueUp, m_direction);
+    transform.m_translation = m_position;
+    return transform;
 }
 
 void Camera::setCameraTransform(const affine3& transform)
 {
-    // Extract axes from the transform
-    // Column 0 = right, Column 1 = up, Column 2 = forward, Column 3 = position
-    m_direction = float3(transform.m_linear.m02, transform.m_linear.m12, transform.m_linear.m22);
-    m_up = float3(transform.m_linear.m01, transform.m_linear.m11, transform.m_linear.m21);
+    // Extract position from translation
     m_position = transform.m_translation;
 
-    // Normalize to avoid drift
-    m_direction = normalize(m_direction);
-    m_up = normalize(m_up);
+    // Extract orientation vectors from linear transform (row vectors)
+    float3 right = transform.m_linear.row0;
+    float3 up = transform.m_linear.row1;
+    float3 forward = transform.m_linear.row2;
+
+    // Normalize to ensure orthonormal basis
+    m_direction = normalize(forward);
+    m_up = normalize(up);
+
+    // Re-orthogonalize: if the input wasn't perfectly orthonormal, fix it
+    float3 computedRight = normalize(cross(m_up, m_direction));
+    m_up = normalize(cross(m_direction, computedRight));
 }
 
 float4x4 Camera::getViewMatrix() const

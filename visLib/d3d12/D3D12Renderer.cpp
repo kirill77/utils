@@ -18,7 +18,7 @@ D3D12Renderer::D3D12Renderer(D3D12Window* pWindow, const RendererConfig& config)
     // Set default camera
     m_camera.setPosition(float3(0.0f, 0.0f, -5.0f));
     m_camera.setDirection(float3(0.0f, 0.0f, 1.0f));
-    m_camera.setUp(float3(1.0f, 0.0f, 0.0f));
+    m_camera.setUp(float3(-1.0f, 0.0f, 0.0f));
     m_camera.setFOV(45.0f);
 
     // Initialize render resources
@@ -56,7 +56,9 @@ std::shared_ptr<IText> D3D12Renderer::createText(std::shared_ptr<IFont> font)
     {
         throw std::runtime_error("Font must be created by the same renderer");
     }
-    return std::make_shared<D3D12Text>(d3d12Font);
+    auto text = std::make_shared<D3D12Text>(d3d12Font);
+    m_textObjects.push_back(text);
+    return text;
 }
 
 void D3D12Renderer::addObject(std::weak_ptr<IVisObject> object)
@@ -347,6 +349,19 @@ box3 D3D12Renderer::render()
             m_lastStats.objectsRendered++;
         }
 
+        ++it;
+    }
+
+    // Render text objects on top
+    for (auto it = m_textObjects.begin(); it != m_textObjects.end(); )
+    {
+        auto pText = it->lock();
+        if (!pText)
+        {
+            it = m_textObjects.erase(it);
+            continue;
+        }
+        pText->render(pSwapChain, m_pRootSignature.Get(), pCmdList.Get());
         ++it;
     }
 

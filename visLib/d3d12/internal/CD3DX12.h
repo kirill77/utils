@@ -227,18 +227,17 @@ struct CD3DX12_ROOT_SIGNATURE_DESC : public D3D12_ROOT_SIGNATURE_DESC
     explicit CD3DX12_ROOT_SIGNATURE_DESC(const D3D12_ROOT_SIGNATURE_DESC& o) noexcept : D3D12_ROOT_SIGNATURE_DESC(o) {}
     
     inline void Init(
-        UINT numParameters,
-        const D3D12_ROOT_PARAMETER* pParameters,
-        UINT numStaticSamplers = 0,
-        const D3D12_STATIC_SAMPLER_DESC* pStaticSamplers = nullptr,
-        D3D12_ROOT_SIGNATURE_FLAGS flags = D3D12_ROOT_SIGNATURE_FLAG_NONE) noexcept
+        UINT numParams,
+        const D3D12_ROOT_PARAMETER* params,
+        UINT numSamplers = 0,
+        const D3D12_STATIC_SAMPLER_DESC* samplers = nullptr,
+        D3D12_ROOT_SIGNATURE_FLAGS rootFlags = D3D12_ROOT_SIGNATURE_FLAG_NONE) noexcept
     {
-        NumParameters = numParameters;
-        pParameters = pParameters;
-        NumStaticSamplers = numStaticSamplers;
-        pStaticSamplers = pStaticSamplers;
-        Flags = flags;
-        this->pParameters = pParameters;
+        NumParameters = numParams;
+        pParameters = params;
+        NumStaticSamplers = numSamplers;
+        pStaticSamplers = samplers;
+        Flags = rootFlags;
     }
 };
 

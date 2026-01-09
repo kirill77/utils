@@ -3,6 +3,7 @@
 #include "D3D12Common.h"
 #include "ShaderHelper.h"
 #include "DirectXHelpers.h"
+#include "utils/fileUtils/fileUtils.h"
 #include <fstream>
 #include <vector>
 #include <d3dcompiler.h>
@@ -15,39 +16,6 @@ ShaderHelper& ShaderHelper::getInstance()
 {
     static ShaderHelper instance;
     return instance;
-}
-
-// Helper to find shader file in common locations
-static bool findShaderFile(const std::wstring& filename, std::filesystem::path& foundPath)
-{
-    // Check if file exists directly
-    std::filesystem::path directPath(filename);
-    if (std::filesystem::exists(directPath))
-    {
-        foundPath = directPath;
-        return true;
-    }
-
-    // Check common shader directories
-    std::vector<std::filesystem::path> searchPaths = {
-        std::filesystem::current_path(),
-        std::filesystem::current_path() / "Shaders",
-        std::filesystem::current_path() / "shaders",
-        std::filesystem::current_path() / ".." / "Shaders",
-        std::filesystem::current_path() / ".." / "shaders"
-    };
-
-    for (const auto& searchPath : searchPaths)
-    {
-        std::filesystem::path testPath = searchPath / filename;
-        if (std::filesystem::exists(testPath))
-        {
-            foundPath = testPath;
-            return true;
-        }
-    }
-
-    return false;
 }
 
 Microsoft::WRL::ComPtr<ID3DBlob> ShaderHelper::loadShader(
@@ -68,7 +36,7 @@ Microsoft::WRL::ComPtr<ID3DBlob> ShaderHelper::loadShader(
     
     // Find the shader file
     std::filesystem::path foundPath;
-    if (!findShaderFile(filePath, foundPath))
+    if (!FileUtils::findTheFile(filePath, foundPath))
     {
         std::filesystem::path pathObj(filePath);
         throw std::runtime_error("Failed to find shader file: " + pathObj.string());
@@ -115,7 +83,7 @@ Microsoft::WRL::ComPtr<ID3DBlob> ShaderHelper::loadCompiledShader(const std::wst
     
     // Find the shader file
     std::filesystem::path foundPath;
-    if (!findShaderFile(filePath, foundPath))
+    if (!FileUtils::findTheFile(filePath, foundPath))
     {
         return nullptr;
     }

@@ -41,21 +41,24 @@ box3 MeshNode::getBoundingBox() const
     box3 result = box3::empty();
 
     // Accumulate bounding boxes from meshes at this level
+    // Transform by this node's transform to get bounds in parent space
     for (const auto& mesh : m_meshes) {
         if (mesh && !mesh->isEmpty()) {
             const box3& meshBounds = mesh->getBoundingBox();
             if (!meshBounds.isempty()) {
-                result = result | meshBounds;
+                box3 transformedBounds = meshBounds * m_transform;
+                result = result | transformedBounds;
             }
         }
     }
 
-    // Recursively accumulate from children (transform their bounds to our local space)
+    // Recursively accumulate from children
+    // Child bounds are already in child's parent space (our local space),
+    // so transform them by this node's transform to get bounds in our parent space
     for (const auto& child : m_children) {
         box3 childBounds = child.getBoundingBox();
         if (!childBounds.isempty()) {
-            // Transform child bounds by child's transform to get bounds in our space
-            box3 transformedBounds = childBounds * child.getTransform();
+            box3 transformedBounds = childBounds * m_transform;
             result = result | transformedBounds;
         }
     }

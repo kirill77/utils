@@ -200,6 +200,12 @@
     <None Include="d3d12\Shaders\TextVertexShader.hlsl" />
     <None Include="d3d12\Shaders\VertexShader.hlsl" />
   </ItemGroup>
+  <!-- Project References -->
+  <ItemGroup>
+    <ProjectReference Include="..\fileUtils\fileUtils.vcxproj">
+      <Project>{ef803333-416c-48c8-8c52-623815af1682}</Project>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

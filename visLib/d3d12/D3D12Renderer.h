@@ -69,6 +69,7 @@ private:
     RenderStats m_lastStats;
 
     std::vector<std::weak_ptr<IVisObject>> m_objects;
+    std::vector<std::weak_ptr<D3D12Text>> m_textObjects;
 
     // DirectX resources
     Microsoft::WRL::ComPtr<ID3D12RootSignature> m_pRootSignature;
