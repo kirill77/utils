@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="include">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="d3d12">
+      <UniqueIdentifier>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="d3d12\internal">
+      <UniqueIdentifier>{B2C3D4E5-F6A7-8901-BCDE-F12345678901}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="d3d12\Shaders">
+      <UniqueIdentifier>{C3D4E5F6-A7B8-9012-CDEF-012345678912}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <!-- Abstract Interface Headers -->
+  <ItemGroup>
+    <ClInclude Include="include\Types.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\InputState.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\IWindow.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\IMesh.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\IFont.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\IText.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Camera.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\MeshNode.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\IVisObject.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\IRenderer.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\visLib.h">
+      <Filter>include</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <!-- D3D12 Backend Headers -->
+  <ItemGroup>
+    <ClInclude Include="d3d12\D3D12Font.h">
+      <Filter>d3d12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3d12\D3D12InputState.h">
+      <Filter>d3d12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3d12\D3D12Mesh.h">
+      <Filter>d3d12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3d12\D3D12Renderer.h">
+      <Filter>d3d12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3d12\D3D12Text.h">
+      <Filter>d3d12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3d12\D3D12Window.h">
+      <Filter>d3d12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3d12\internal\D3D12Common.h">
+      <Filter>d3d12\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="d3d12\internal\CD3DX12.h">
+      <Filter>d3d12\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="d3d12\internal\DirectXHelpers.h">
+      <Filter>d3d12\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="d3d12\internal\GPUQueue.h">
+      <Filter>d3d12\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="d3d12\internal\ShaderHelper.h">
+      <Filter>d3d12\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="d3d12\internal\SwapChain.h">
+      <Filter>d3d12\internal</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <!-- Common Source Files -->
+  <ItemGroup>
+    <ClCompile Include="common\Camera.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="common\MeshNode.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <!-- D3D12 Backend Source Files -->
+  <ItemGroup>
+    <ClCompile Include="d3d12\D3D12Font.cpp">
+      <Filter>d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="d3d12\D3D12InputState.cpp">
+      <Filter>d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="d3d12\D3D12Mesh.cpp">
+      <Filter>d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="d3d12\D3D12Renderer.cpp">
+      <Filter>d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="d3d12\D3D12Text.cpp">
+      <Filter>d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="d3d12\D3D12Window.cpp">
+      <Filter>d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="d3d12\internal\GPUQueue.cpp">
+      <Filter>d3d12\internal</Filter>
+    </ClCompile>
+    <ClCompile Include="d3d12\internal\ShaderHelper.cpp">
+      <Filter>d3d12\internal</Filter>
+    </ClCompile>
+    <ClCompile Include="d3d12\internal\SwapChain.cpp">
+      <Filter>d3d12\internal</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <!-- HLSL Shaders -->
+  <ItemGroup>
+    <None Include="d3d12\Shaders\VertexShader.hlsl">
+      <Filter>d3d12\Shaders</Filter>
+    </None>
+    <None Include="d3d12\Shaders\PixelShader.hlsl">
+      <Filter>d3d12\Shaders</Filter>
+    </None>
+    <None Include="d3d12\Shaders\TextVertexShader.hlsl">
+      <Filter>d3d12\Shaders</Filter>
+    </None>
+    <None Include="d3d12\Shaders\TextPixelShader.hlsl">
+      <Filter>d3d12\Shaders</Filter>
+    </None>
+  </ItemGroup>
+</Project>
