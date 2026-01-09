@@ -1,9 +1,8 @@
-#include "pch.h"
+#include "Common.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <string>
 #include <filesystem>
-#include "framework.h"
 #include "fileUtils.h"
 #include "utils/timeUtils/timeUtils.h"
 

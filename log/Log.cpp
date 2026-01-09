@@ -1,7 +1,7 @@
 // Log.cpp : Defines the functions for the static library.
 //
 
-#include "pch.h"
+#include "Common.h"
 #include <string>
 #include <assert.h>
 #include <unordered_map>
@@ -10,7 +10,6 @@
 #include <algorithm>
 #include "utils/fileUtils/fileUtils.h"
 #include "utils/timeUtils/timeUtils.h"
-#include "framework.h"
 #include "ILog.h"
 
 static std::string createLogFileName(const char *sName)

@@ -1,7 +1,7 @@
 // timeUtils.cpp : Defines the functions for the static library.
 //
 
-#include "pch.h"
+#include "Common.h"
 #include "TimeUtils.h"
 
 std::string TimeUtils::timeStampToString(std::time_t inTS, const char* sFormatString)
