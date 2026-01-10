@@ -14,7 +14,7 @@ Principles to guide implementation decisions and resolve merge request debates.
 | `f` | Float/double value | `fDtSec` |
 | `p` | Pointer (raw or smart) | `pWindow` |
 | `I` | Abstract interface | `IProcess` |
-| `b` | Boolean | `bPaused` |
+| `b`, `is`, `has`, `can` | Boolean | `bPaused`, `isEmpty()`, `hasChildren()`, `canExecute()` |
 
 **Why**: Reduces cognitive load; you know what `m_fRadius` is without checking the declaration.
 
@@ -35,28 +35,7 @@ Principles to guide implementation decisions and resolve merge request debates.
 
 ---
 
-## 3. Units
-
-**Rule**: Use canonical units everywhere; encode in names or document inline.
-
-| Quantity | Unit | Abbreviation |
-|----------|------|--------------|
-| Time | seconds | `s`, `Sec` |
-| Length | micrometers | `µm`, `Um`, `Microm` |
-| Force | femtoNewtons | `fN`, `Fn` |
-| Concentration | molecules/µm³ | `PerUm3` |
-| Angle | radians | `Rad` |
-
-- No milliseconds, nanometers, or picoNewtons — convert at boundaries if needed
-- Append unit to constants: `MT_VGROW_MAX_UM_PER_S`
-- Append unit to parameters: `float fRadiusMicrom`
-- Comment if non-obvious: `double fDt; // seconds`
-
-**Why**: Consistent units eliminate conversion bugs and make code reviewable without unit-tracing.
-
----
-
-## 4. Interfaces over Implementations
+## 3. Interfaces over Implementations
 
 **Rule**: Depend on abstract interfaces (`I*`), not concrete classes.
 
@@ -68,7 +47,7 @@ Principles to guide implementation decisions and resolve merge request debates.
 
 ---
 
-## 5. Abstract Projects Structure
+## 4. Abstract Projects Structure
 
 **Rule**: Separate interface, shared code, and implementation.
 
@@ -85,7 +64,7 @@ moduleName/
 
 ---
 
-## 6. Comments Describe Current State
+## 5. Comments Describe Current State
 
 **Rule**: Comments explain *what is*, not *what was*.
 
@@ -96,32 +75,7 @@ moduleName/
 
 ---
 
-## 7. Biology over Workarounds
-
-**Rule**: Fix root causes, not symptoms.
-
-- ❌ Maternal seeding hack to compensate for missing transcription
-- ✅ Implement transcription pathway properly
-
-Temporary instrumentation for diagnosis is fine; remove before merge.
-
-**Why**: Workarounds compound; proper biology is maintainable.
-
----
-
-## 8. Validation against Data
-
-**Rule**: Simulation behavior must match wet-lab data.
-
-- Cite sources (PMID/DOI) in `data/wetLab/`
-- Validation tests in `src/organisms/worm/` check constraints
-- Failing validation blocks merge
-
-**Why**: The simulation's value is accuracy, not speed.
-
----
-
-## 9. Simplest Solution
+## 6. Simplest Solution
 
 **Rule**: Avoid over-engineering.
 
@@ -133,7 +87,7 @@ Temporary instrumentation for diagnosis is fine; remove before merge.
 
 ---
 
-## 10. Encapsulation
+## 7. Encapsulation
 
 **Rule**: Variables are always private; avoid protected members.
 
@@ -150,7 +104,7 @@ Methods:
 
 ---
 
-## 11. Small Functions and Classes
+## 8. Small Functions and Classes
 
 **Rule**: Keep functions and classes focused and concise.
 
@@ -162,22 +116,21 @@ Methods:
 
 ---
 
-## 12. No Duplication
+## 9. No Duplication
 
 **Rule**: Define once, reference everywhere.
 
-- All simulation constants live in `src/chemistry/molecules/simConstants.h`
 - No magic numbers in code — extract to named constants
 - No copy-pasted logic — extract to shared functions
 - Comments explain *why*, not *what value*:
   - ❌ `constexpr double FOO = 0.5; // 0.5`
-  - ✅ `constexpr double FOO = 0.5; // Srayko et al. 2005, Table 1`
+  - ✅ `constexpr double FOO = 0.5; // source: Smith et al. 2005`
 
-**Why**: Single source of truth; changes propagate automatically; easier to cite sources.
+**Why**: Single source of truth; changes propagate automatically.
 
 ---
 
-## 13. No Raw Pointers for Storage
+## 10. No Raw Pointers for Storage
 
 **Rule**: Member variables must not be raw pointers.
 
@@ -193,7 +146,7 @@ Raw pointers are acceptable for:
 
 ---
 
-## 14. No Multiple Inheritance
+## 11. No Multiple Inheritance
 
 **Rule**: A class may inherit from at most one base class.
 
@@ -205,20 +158,20 @@ Raw pointers are acceptable for:
 
 ---
 
-## 15. No Circular Dependencies
+## 12. No Circular Dependencies
 
 **Rule**: Dependencies between folders/libraries must be acyclic.
 
 - If folder A includes from folder B, folder B cannot include from folder A
 - Draw a dependency graph; it must be a DAG (no cycles)
-- ❌ `biology/` ↔ `chemistry/` (mutual includes)
-- ✅ `biology/` → `chemistry/` → `geometry/` (one-way chain)
+- ❌ `libA/` ↔ `libB/` (mutual includes)
+- ✅ `libA/` → `libB/` → `libC/` (one-way chain)
 
 **Why**: Circular dependencies cause build order issues and indicate tangled design.
 
 ---
 
-## 16. No Callbacks
+## 13. No Callbacks
 
 **Rule**: Avoid `std::function` and lambdas for callbacks; use interface pointers instead.
 
@@ -231,20 +184,19 @@ Raw pointers are acceptable for:
 
 ---
 
-## 17. Minimal Templates
+## 14. Minimal Templates
 
 **Rule**: Use templates only for simple utility types, not domain objects.
 
 - ✅ `vector<T, n>`, `matrix<T, m, n>` — math utilities
 - ✅ `std::shared_ptr<T>`, `std::vector<T>` — standard library
-- ❌ `Organelle<T>`, `Process<Config>` — domain objects
 - ❌ Template metaprogramming
 
 **Why**: Templates increase compile times, produce cryptic errors, and obscure domain logic.
 
 ---
 
-## 18. No Pointer Cycles
+## 15. No Pointer Cycles
 
 **Rule**: Object ownership must be acyclic; avoid back-references when possible.
 
@@ -259,7 +211,7 @@ Prefer designs where child objects don't reference parents.
 
 ---
 
-## 19. Small Projects
+## 16. Small Projects
 
 **Rule**: Split large libraries into focused sub-libraries.
 
@@ -271,43 +223,43 @@ Prefer designs where child objects don't reference parents.
 
 ---
 
-## 20. Unique File Names
+## 17. Unique File Names
 
 **Rule**: Avoid duplicate file names across the codebase.
 
-- ❌ `biology/Cell.h` and `chemistry/Cell.h`
-- ✅ `biology/Cell.h` and `chemistry/GridCell.h`
+- ❌ `libA/Utils.h` and `libB/Utils.h`
+- ✅ `libA/Utils.h` and `libB/StringUtils.h`
 
 **Why**: Prevents include ambiguity and confusion when searching/navigating.
 
 ---
 
-## 21. No Nested Namespaces
+## 18. No Nested Namespaces
 
 **Rule**: Use flat, single-level namespaces only.
 
 - ❌ `namespace visLib::internal { }`
-- ❌ `namespace biology { namespace organelles { } }`
+- ❌ `namespace foo { namespace bar { } }`
 - ✅ `namespace visLib { }`
 
 **Why**: Nested namespaces add verbosity without proportional benefit in a single-team codebase.
 
 ---
 
-## 22. Include Paths
+## 19. Include Paths
 
 **Rule**: Includes use either same-folder or full path from solution root.
 
 - ✅ `#include "Foo.h"` — file in same folder
-- ✅ `#include "biology/organelles/Cell.h"` — full path from `src/`
+- ✅ `#include "libA/module/File.h"` — full path from root
 - ❌ `#include "../utils/Helper.h"` — relative path with `..`
-- ❌ `#include "Cell.h"` — ambiguous (which Cell.h?)
+- ❌ `#include "File.h"` — ambiguous (which File.h?)
 
 **Why**: Explicit paths prevent ambiguity and make file locations obvious.
 
 ---
 
-## 23. Formatting
+## 20. Formatting
 
 **Rule**: Consistent whitespace.
 
