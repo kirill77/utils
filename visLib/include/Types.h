@@ -2,7 +2,7 @@
 
 // visLib Types - Includes common math types used by the visualization library
 
-#include "geometry/vectors/vector.h"
-#include "geometry/vectors/matrix.h"
-#include "geometry/vectors/affine.h"
-#include "geometry/vectors/box.h"
+#include "utils/math/vector.h"
+#include "utils/math/matrix.h"
+#include "utils/math/affine.h"
+#include "utils/math/box.h"

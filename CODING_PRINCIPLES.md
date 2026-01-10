@@ -271,6 +271,38 @@ Prefer designs where child objects don't reference parents.
 
 ---
 
+## 21. Consistent Units
+
+**Rule**: Choose one unit per quantity type; convert at system boundaries only.
+
+| Quantity | Internal Unit | Convert at boundary |
+|----------|---------------|---------------------|
+| Time | seconds (`float fTimeSec`) | API accepts ms → convert on entry |
+| Distance | meters | File format uses mm → convert on load/save |
+| Angles | radians | UI shows degrees → convert for display |
+
+- ❌ Mixing units: `sleep(delayMs); update(deltaSec);`
+- ❌ Implicit conversions scattered throughout code
+- ✅ Single unit internally; explicit conversion functions at edges
+- ✅ Unit suffix in variable names: `fDurationSec`, `fDistanceM`, `fAngleRad`
+
+```cpp
+// At boundary (public API)
+void setTimeout(float fTimeoutMs) {
+    m_fTimeoutSec = fTimeoutMs / 1000.0f;  // convert once
+}
+
+// Internal code uses consistent unit
+void update(float fDtSec) {
+    m_fElapsedSec += fDtSec;
+    if (m_fElapsedSec > m_fTimeoutSec) { /* ... */ }
+}
+```
+
+**Why**: Mixed units cause subtle bugs (Mars Climate Orbiter). Consistent units eliminate conversion errors and make code predictable.
+
+---
+
 ## Using These Principles
 
 When reviewing a MR with conflicting approaches:

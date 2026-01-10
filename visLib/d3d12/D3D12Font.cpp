@@ -9,7 +9,7 @@
 
 // Include stb_truetype
 #define STB_TRUETYPE_IMPLEMENTATION
-#include "external/stb/stb_truetype.h"
+#include "utils/stb/stb_truetype.h"
 
 namespace visLib {
 namespace d3d12 {
