@@ -17,6 +17,11 @@ struct WindowConfig {
     bool fullscreen = true;
     bool resizable = true;
     bool vsync = true;
+
+    // VR mode: If true, attempts to create a VR window using OpenXR.
+    // Falls back to desktop window if VR is not available.
+    // When VR is active, width/height are ignored (headset resolution is used).
+    bool preferVR = false;
 };
 
 // Abstract window interface

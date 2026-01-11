@@ -469,12 +469,22 @@ void D3D12Renderer::waitForGPU()
 // Factory function implementation
 std::unique_ptr<IRenderer> createRenderer(IWindow* window, const RendererConfig& config)
 {
+    // Try D3D12 desktop window first
     auto d3d12Window = dynamic_cast<d3d12::D3D12Window*>(window);
-    if (!d3d12Window)
+    if (d3d12Window)
     {
-        throw std::runtime_error("Window must be a D3D12 window");
+        return std::make_unique<d3d12::D3D12Renderer>(d3d12Window, config);
     }
-    return std::make_unique<d3d12::D3D12Renderer>(d3d12Window, config);
+
+    // Try OpenXR VR window
+    extern std::unique_ptr<IRenderer> tryCreateOpenXRRenderer(IWindow* window, const RendererConfig& config);
+    auto vrRenderer = tryCreateOpenXRRenderer(window, config);
+    if (vrRenderer)
+    {
+        return vrRenderer;
+    }
+
+    throw std::runtime_error("Unsupported window type for renderer creation");
 }
 
 } // namespace visLib

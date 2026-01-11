@@ -344,6 +344,20 @@ LRESULT CALLBACK D3D12Window::WindowProc(HWND hwnd, UINT message, WPARAM wParam,
 // Factory function implementation
 std::unique_ptr<IWindow> createWindow(const WindowConfig& config)
 {
+    // Try VR first if requested
+    if (config.preferVR)
+    {
+        // Dynamically check for OpenXR support to avoid build dependency
+        // OpenXRWindow is in a separate compilation unit
+        extern std::unique_ptr<IWindow> tryCreateOpenXRWindow(const WindowConfig& config);
+        auto vrWindow = tryCreateOpenXRWindow(config);
+        if (vrWindow)
+        {
+            return vrWindow;
+        }
+        // Fall through to desktop window if VR failed
+    }
+
     return std::make_unique<d3d12::D3D12Window>(config);
 }
 

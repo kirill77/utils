@@ -176,6 +176,13 @@
     <ClInclude Include="d3d12\internal\ShaderHelper.h" />
     <ClInclude Include="d3d12\internal\SwapChain.h" />
   </ItemGroup>
+  <!-- OpenXR Backend Headers (VR support) -->
+  <ItemGroup>
+    <ClInclude Include="openxr\OpenXRLoader.h" />
+    <ClInclude Include="openxr\OpenXRSession.h" />
+    <ClInclude Include="openxr\OpenXRWindow.h" />
+    <ClInclude Include="openxr\OpenXRRenderer.h" />
+  </ItemGroup>
   <!-- Common (Platform-Independent) Source Files -->
   <ItemGroup>
     <ClCompile Include="common\Camera.cpp" />
@@ -192,6 +199,14 @@
     <ClCompile Include="d3d12\internal\GPUQueue.cpp" />
     <ClCompile Include="d3d12\internal\ShaderHelper.cpp" />
     <ClCompile Include="d3d12\internal\SwapChain.cpp" />
+  </ItemGroup>
+  <!-- OpenXR Backend Source Files (VR support) -->
+  <ItemGroup>
+    <ClCompile Include="openxr\OpenXRLoader.cpp" />
+    <ClCompile Include="openxr\OpenXRSession.cpp" />
+    <ClCompile Include="openxr\OpenXRWindow.cpp" />
+    <ClCompile Include="openxr\OpenXRRenderer.cpp" />
+    <ClCompile Include="openxr\OpenXRFactory.cpp" />
   </ItemGroup>
   <!-- HLSL Shaders -->
   <ItemGroup>

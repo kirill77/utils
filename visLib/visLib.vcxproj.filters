@@ -16,6 +16,9 @@
     <Filter Include="d3d12\Shaders">
       <UniqueIdentifier>{C3D4E5F6-A7B8-9012-CDEF-012345678912}</UniqueIdentifier>
     </Filter>
+    <Filter Include="openxr">
+      <UniqueIdentifier>{D4E5F6A7-B8C9-0123-DEF0-123456789ABC}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <!-- Abstract Interface Headers -->
   <ItemGroup>
@@ -92,6 +95,21 @@
       <Filter>d3d12\internal</Filter>
     </ClInclude>
   </ItemGroup>
+  <!-- OpenXR Backend Headers -->
+  <ItemGroup>
+    <ClInclude Include="openxr\OpenXRLoader.h">
+      <Filter>openxr</Filter>
+    </ClInclude>
+    <ClInclude Include="openxr\OpenXRSession.h">
+      <Filter>openxr</Filter>
+    </ClInclude>
+    <ClInclude Include="openxr\OpenXRWindow.h">
+      <Filter>openxr</Filter>
+    </ClInclude>
+    <ClInclude Include="openxr\OpenXRRenderer.h">
+      <Filter>openxr</Filter>
+    </ClInclude>
+  </ItemGroup>
   <!-- Common Source Files -->
   <ItemGroup>
     <ClCompile Include="common\Camera.cpp">
@@ -129,6 +147,24 @@
     </ClCompile>
     <ClCompile Include="d3d12\internal\SwapChain.cpp">
       <Filter>d3d12\internal</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <!-- OpenXR Backend Source Files -->
+  <ItemGroup>
+    <ClCompile Include="openxr\OpenXRLoader.cpp">
+      <Filter>openxr</Filter>
+    </ClCompile>
+    <ClCompile Include="openxr\OpenXRSession.cpp">
+      <Filter>openxr</Filter>
+    </ClCompile>
+    <ClCompile Include="openxr\OpenXRWindow.cpp">
+      <Filter>openxr</Filter>
+    </ClCompile>
+    <ClCompile Include="openxr\OpenXRRenderer.cpp">
+      <Filter>openxr</Filter>
+    </ClCompile>
+    <ClCompile Include="openxr\OpenXRFactory.cpp">
+      <Filter>openxr</Filter>
     </ClCompile>
   </ItemGroup>
   <!-- HLSL Shaders -->
