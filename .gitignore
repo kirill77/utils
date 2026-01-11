@@ -2,3 +2,7 @@ x64
 
 # Visual Studio user-specific files (local debugging settings, etc.)
 *.vcxproj.user
+
+# Ignore OpenXR downloaded binaries, but keep headers for compilation
+openXR/*
+!openXR/include/

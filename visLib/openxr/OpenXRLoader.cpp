@@ -3,7 +3,9 @@
 #ifdef _WIN32
 
 #include "OpenXRLoader.h"
+#include "utils/fileUtils/fileUtils.h"
 #include <sstream>
+#include <filesystem>
 
 namespace visLib {
 namespace openxr {
@@ -36,16 +38,15 @@ bool OpenXRLoader::tryLoad()
         return true; // Already loaded
     }
 
-    // Try to load openxr_loader.dll from various locations
-    const char* dllPaths[] = {
-        "openxr_loader.dll",           // Current directory / PATH
-        "openxr_loader_x64.dll",       // Alternative naming
-        nullptr
-    };
+    // First, try to find the DLL via FileUtils (searches from repo root upwards)
+    std::filesystem::path foundPath;
+    if (FileUtils::findTheFile(L"src/utils/openXR/native/x64/release/bin/openxr_loader.dll", foundPath)) {
+        m_hModule = LoadLibraryW(foundPath.c_str());
+    }
 
-    for (const char** path = dllPaths; *path != nullptr; ++path) {
-        m_hModule = LoadLibraryA(*path);
-        if (m_hModule) break;
+    // Fallback: try current directory / PATH
+    if (!m_hModule) {
+        m_hModule = LoadLibraryA("openxr_loader.dll");
     }
 
     if (!m_hModule) {
