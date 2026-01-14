@@ -14,13 +14,8 @@ D3D12Renderer::D3D12Renderer(D3D12Window* pWindow, const RendererConfig& config)
     : m_pWindow(pWindow)
     , m_config(config)
 {
-    // Set default camera
-    m_camera.setPosition(float3(0.0f, 0.0f, -5.0f));
-    m_camera.setDirection(float3(0.0f, 0.0f, 1.0f));
-    m_camera.setUp(float3(-1.0f, 0.0f, 0.0f));
-    m_camera.setFOV(45.0f);
-
-    // Initialize render resources
+    // Camera uses defaults from Camera constructor
+    // All camera modifications happen in shared application code
     initializeRenderResources();
 }
 

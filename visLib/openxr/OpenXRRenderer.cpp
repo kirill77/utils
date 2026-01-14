@@ -21,12 +21,8 @@ OpenXRRenderer::OpenXRRenderer(OpenXRWindow* pWindow, const RendererConfig& conf
     , m_session(pWindow->getSession())
     , m_config(config)
 {
-    // Set default camera (VR will override this with head tracking)
-    m_camera.setPosition(float3(0.0f, 0.0f, 0.0f));
-    m_camera.setDirection(float3(0.0f, 0.0f, 1.0f));
-    m_camera.setUp(float3(0.0f, 1.0f, 0.0f));
-    m_camera.setFOV(90.0f);  // VR typically uses wide FOV
-
+    // Camera uses defaults from Camera constructor
+    // All camera modifications happen in shared application code
     initializeRenderResources();
 }
 
@@ -386,8 +382,16 @@ box3 OpenXRRenderer::render()
 
         // Get view/projection for this eye
         const XrView& view = m_session->getView(eye);
-        DirectX::XMMATRIX viewMatrix = xrPoseToViewMatrix(view.pose);
+        DirectX::XMMATRIX eyeView = xrPoseToViewMatrix(view.pose);
         DirectX::XMMATRIX projMatrix = xrFovToProjectionMatrix(view.fov, 0.01f, 1000.0f);
+
+        // Adjust camera to match the position/rotation seen in the desktop view
+        float3 camPos = m_camera.getPosition();
+        DirectX::XMMATRIX worldOffset = DirectX::XMMatrixIdentity();
+        worldOffset = DirectX::XMMatrixMultiply(DirectX::XMMatrixRotationY(DirectX::XM_PI), worldOffset);
+        worldOffset = DirectX::XMMatrixMultiply(DirectX::XMMatrixRotationZ(-DirectX::XM_PIDIV2), worldOffset);
+        worldOffset = DirectX::XMMatrixMultiply(DirectX::XMMatrixTranslation(-camPos.x, -camPos.y, -camPos.z), worldOffset);
+        DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixMultiply(worldOffset, eyeView);
 
         // Create RTV for this swapchain image
         UINT rtvDescriptorSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -404,15 +408,6 @@ box3 OpenXRRenderer::render()
         renderEye(eye, viewMatrix, projMatrix, renderTarget, sceneBoundingBox);
 
         m_session->releaseSwapchainImage(eye);
-    }
-
-    // Update camera position from head tracking (for any code that queries camera)
-    if (m_session) {
-        const XrView& leftEye = m_session->getView(0);
-        m_camera.setPosition(float3(
-            leftEye.pose.position.x,
-            leftEye.pose.position.y,
-            leftEye.pose.position.z));
     }
 
     return sceneBoundingBox;
