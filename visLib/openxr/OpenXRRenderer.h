@@ -7,6 +7,8 @@
 
 #include "utils/visLib/include/IRenderer.h"
 #include "utils/visLib/include/MeshNode.h"
+#include "utils/visLib/d3d12/internal/GPUQueue.h"
+#include "utils/visLib/d3d12/D3D12Text.h"
 #include "OpenXRWindow.h"
 #include "OpenXRSession.h"
 #include <d3d12.h>
@@ -105,6 +107,10 @@ private:
     uint8_t* m_pMappedTransformBuffer = nullptr;
 
     bool m_frameStarted = false;
+
+    // Text rendering support
+    std::shared_ptr<d3d12::GPUQueue> m_pGPUQueue;
+    std::vector<std::weak_ptr<d3d12::D3D12Text>> m_textObjects;
 };
 
 } // namespace openxr

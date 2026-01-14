@@ -3,6 +3,7 @@
 #ifdef _WIN32
 
 #include "utils/visLib/d3d12/internal/D3D12Common.h"
+#include "utils/visLib/d3d12/internal/D3D12RenderTarget.h"
 #include "utils/visLib/include/IText.h"
 #include "D3D12Font.h"
 #include <vector>
@@ -54,7 +55,11 @@ public:
     std::shared_ptr<IFont> getFont() const override { return m_pFont; }
 
     // D3D12-specific methods
-    void render(SwapChain* pSwapChain, 
+    void render(const D3D12RenderTarget& target,
+                ID3D12RootSignature* pRootSignature,
+                ID3D12GraphicsCommandList* pCmdList);
+
+    void render(SwapChain* pSwapChain,
                 ID3D12RootSignature* pRootSignature,
                 ID3D12GraphicsCommandList* pCmdList);
 

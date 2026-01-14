@@ -249,6 +249,9 @@ void OpenXRRenderer::initializeRenderResources()
         pDevice->CreateDepthStencilView(m_pDepthBuffer.Get(), &dsvDesc,
                                         m_pDSVHeap->GetCPUDescriptorHandleForHeapStart());
     }
+
+    // Create GPUQueue for font texture uploads
+    m_pGPUQueue = std::make_shared<d3d12::GPUQueue>(pDevice);
 }
 
 std::shared_ptr<IMesh> OpenXRRenderer::createMesh()
@@ -258,16 +261,23 @@ std::shared_ptr<IMesh> OpenXRRenderer::createMesh()
 
 std::shared_ptr<IFont> OpenXRRenderer::createFont(uint32_t fontSize)
 {
-    // Text rendering in VR is more complex - for now return nullptr
-    // TODO: Implement VR text rendering
-    (void)fontSize;
-    return nullptr;
+    if (!m_pGPUQueue)
+    {
+        return nullptr;
+    }
+    return std::make_shared<d3d12::D3D12Font>(fontSize, m_pGPUQueue.get());
 }
 
 std::shared_ptr<IText> OpenXRRenderer::createText(std::shared_ptr<IFont> font)
 {
-    (void)font;
-    return nullptr;
+    auto d3d12Font = std::dynamic_pointer_cast<d3d12::D3D12Font>(font);
+    if (!d3d12Font)
+    {
+        return nullptr;
+    }
+    auto text = std::make_shared<d3d12::D3D12Text>(d3d12Font);
+    m_textObjects.push_back(text);
+    return text;
 }
 
 void OpenXRRenderer::addObject(std::weak_ptr<IVisObject> object)
@@ -470,6 +480,26 @@ void OpenXRRenderer::renderEye(int eye, const DirectX::XMMATRIX& viewMatrix,
             renderMeshNode(node, affine3::identity(), m_pCommandList.Get(), sceneBoundingBox, hasValidBounds);
             m_lastStats.objectsRendered++;
         }
+        ++it;
+    }
+
+    // Render text objects (after 3D, while still in RENDER_TARGET state)
+    D3D12RenderTarget textTarget;
+    textTarget.width = m_session->getRenderWidth();
+    textTarget.height = m_session->getRenderHeight();
+    textTarget.rtvHandle = rtvHandle;
+    textTarget.dsvHandle = dsvHandle;
+    textTarget.pResource = nullptr;  // Skip barriers - already in RENDER_TARGET state
+
+    for (auto it = m_textObjects.begin(); it != m_textObjects.end(); )
+    {
+        auto pText = it->lock();
+        if (!pText)
+        {
+            it = m_textObjects.erase(it);
+            continue;
+        }
+        pText->render(textTarget, m_pRootSignature.Get(), m_pCommandList.Get());
         ++it;
     }
 

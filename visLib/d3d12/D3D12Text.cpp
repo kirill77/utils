@@ -309,70 +309,69 @@ void D3D12Text::ensureDescriptorHeaps(ID3D12Device* pDevice)
 }
 
 void D3D12Text::render(
-    SwapChain* pSwapChain,
+    const D3D12RenderTarget& target,
     ID3D12RootSignature* pRootSignature,
     ID3D12GraphicsCommandList* pCmdList)
 {
-    if (m_lines.empty() || !m_pFont || !pRootSignature || !pCmdList || !pSwapChain)
+    if (m_lines.empty() || !m_pFont || !pRootSignature || !pCmdList)
     {
         return;
     }
-    
-    // Get swap chain dimensions
-    DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
-    ThrowIfFailed(pSwapChain->getSwapChain()->GetDesc1(&swapChainDesc));
-    float2 screenSize = float2(static_cast<float>(swapChainDesc.Width), 
-                               static_cast<float>(swapChainDesc.Height));
-    
+
+    if (target.width == 0 || target.height == 0)
+    {
+        return;
+    }
+
+    float2 screenSize = float2(static_cast<float>(target.width),
+                               static_cast<float>(target.height));
+
     // Get device from command list
     Microsoft::WRL::ComPtr<ID3D12Device> pDevice;
     pCmdList->GetDevice(IID_PPV_ARGS(&pDevice));
-    
+
     // Generate text geometry
     std::vector<TextVertex> vertices;
     std::vector<uint16_t> indices;
     generateTextQuads(vertices, indices, screenSize);
-    
+
     if (vertices.empty() || indices.empty())
     {
         return;
     }
-    
+
     // Update buffers
     updateVertexBuffer(vertices, indices, pDevice.Get());
     updateConstantBuffer(screenSize, pDevice.Get());
-    
+
     // Ensure descriptor heaps exist
     ensureDescriptorHeaps(pDevice.Get());
-    
+
     // Update CBV
     if (m_constantBuffer && m_descriptorHeap)
     {
-        UINT descriptorSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         CD3DX12_CPU_DESCRIPTOR_HANDLE heapStart(m_descriptorHeap->GetCPUDescriptorHandleForHeapStart());
-        
+
         D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
         cbvDesc.BufferLocation = m_constantBuffer->GetGPUVirtualAddress();
         cbvDesc.SizeInBytes = (sizeof(TextParams) + 255) & ~255;
         pDevice->CreateConstantBufferView(&cbvDesc, heapStart);
     }
-    
-    // Get back buffer handles from SwapChain
-    ID3D12Resource* backBufferResource = pSwapChain->getBBColor();
-    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = pSwapChain->getBBColorCPUHandle();
-    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = pSwapChain->getBBDepthCPUHandle();
-    
-    // Transition back buffer to render target state
-    CD3DX12_RESOURCE_BARRIER renderTargetBarrier = 
-        CD3DX12_RESOURCE_BARRIER::Transition(
-            backBufferResource,
-            D3D12_RESOURCE_STATE_PRESENT,
-            D3D12_RESOURCE_STATE_RENDER_TARGET);
-    pCmdList->ResourceBarrier(1, &renderTargetBarrier);
-    
+
+    // Transition to render target state if resource provided (caller wants us to manage barriers)
+    if (target.pResource)
+    {
+        CD3DX12_RESOURCE_BARRIER renderTargetBarrier =
+            CD3DX12_RESOURCE_BARRIER::Transition(
+                target.pResource.Get(),
+                D3D12_RESOURCE_STATE_PRESENT,
+                D3D12_RESOURCE_STATE_RENDER_TARGET);
+        pCmdList->ResourceBarrier(1, &renderTargetBarrier);
+    }
+
     // Set render targets
-    pCmdList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
-    
+    pCmdList->OMSetRenderTargets(1, &target.rtvHandle, FALSE, &target.dsvHandle);
+
     // Set viewport and scissor rect
     D3D12_VIEWPORT viewport = {};
     viewport.TopLeftX = 0.0f;
@@ -382,52 +381,79 @@ void D3D12Text::render(
     viewport.MinDepth = 0.0f;
     viewport.MaxDepth = 1.0f;
     pCmdList->RSSetViewports(1, &viewport);
-    
+
     D3D12_RECT scissorRect = {};
     scissorRect.left = 0;
     scissorRect.top = 0;
     scissorRect.right = static_cast<LONG>(screenSize.x);
     scissorRect.bottom = static_cast<LONG>(screenSize.y);
     pCmdList->RSSetScissorRects(1, &scissorRect);
-    
+
     // Get text PSO
     auto textPSO = m_pFont->getTextPSO(pRootSignature);
     if (!textPSO)
     {
         return;
     }
-    
+
     // Set pipeline state
     pCmdList->SetGraphicsRootSignature(pRootSignature);
     pCmdList->SetPipelineState(textPSO);
-    
+
     // Set primitive topology
     pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    
+
     // Set vertex and index buffers
     pCmdList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
     pCmdList->IASetIndexBuffer(&m_indexBufferView);
-    
+
     // Set descriptor heaps
     ID3D12DescriptorHeap* heaps[] = { m_descriptorHeap.Get() };
     pCmdList->SetDescriptorHeaps(_countof(heaps), heaps);
-    
+
     // Set root signature parameters
     UINT descriptorSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     CD3DX12_GPU_DESCRIPTOR_HANDLE heapStart(m_descriptorHeap->GetGPUDescriptorHandleForHeapStart());
-    
+
     pCmdList->SetGraphicsRootDescriptorTable(0, heapStart);
     pCmdList->SetGraphicsRootDescriptorTable(1, CD3DX12_GPU_DESCRIPTOR_HANDLE(heapStart, 1, descriptorSize));
-    
+
     // Draw text
     pCmdList->DrawIndexedInstanced(m_indexCount, 1, 0, 0, 0);
-    
-    // Transition back buffer back to present state
-    renderTargetBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        backBufferResource,
-        D3D12_RESOURCE_STATE_RENDER_TARGET,
-        D3D12_RESOURCE_STATE_PRESENT);
-    pCmdList->ResourceBarrier(1, &renderTargetBarrier);
+
+    // Transition back to present state if we managed the barrier
+    if (target.pResource)
+    {
+        CD3DX12_RESOURCE_BARRIER presentBarrier =
+            CD3DX12_RESOURCE_BARRIER::Transition(
+                target.pResource.Get(),
+                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                D3D12_RESOURCE_STATE_PRESENT);
+        pCmdList->ResourceBarrier(1, &presentBarrier);
+    }
+}
+
+void D3D12Text::render(
+    SwapChain* pSwapChain,
+    ID3D12RootSignature* pRootSignature,
+    ID3D12GraphicsCommandList* pCmdList)
+{
+    if (!pSwapChain)
+    {
+        return;
+    }
+
+    DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
+    ThrowIfFailed(pSwapChain->getSwapChain()->GetDesc1(&swapChainDesc));
+
+    D3D12RenderTarget target;
+    target.width = swapChainDesc.Width;
+    target.height = swapChainDesc.Height;
+    target.rtvHandle = pSwapChain->getBBColorCPUHandle();
+    target.dsvHandle = pSwapChain->getBBDepthCPUHandle();
+    target.pResource = pSwapChain->getBBColor();
+
+    render(target, pRootSignature, pCmdList);
 }
 
 } // namespace d3d12
