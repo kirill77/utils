@@ -5,11 +5,10 @@
 #include "utils/visLib/d3d12/internal/D3D12Common.h"
 #include "utils/visLib/include/IWindow.h"
 #include "D3D12InputState.h"
-#include "utils/visLib/d3d12/internal/SwapChain.h"
+#include "utils/visLib/d3d12/internal/D3D12SwapChain.h"
 #include <memory>
 
 namespace visLib {
-namespace d3d12 {
 
 // D3D12Window - Win32/D3D12 implementation of IWindow interface
 class D3D12Window : public IWindow
@@ -29,7 +28,7 @@ public:
 
     // D3D12-specific accessors (used by D3D12Renderer)
     ID3D12Device* getDevice() const { return m_device.Get(); }
-    SwapChain* getSwapChain() const { return m_pSwapChain.get(); }
+    D3D12SwapChain* getSwapChain() const { return m_pSwapChain.get(); }
     
     // Window resize handler
     void onWindowResize(uint32_t width, uint32_t height);
@@ -52,10 +51,9 @@ private:
     std::unique_ptr<D3D12InputState> m_inputState;
     
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;
-    std::shared_ptr<SwapChain> m_pSwapChain;
+    std::shared_ptr<D3D12SwapChain> m_pSwapChain;
 };
 
-} // namespace d3d12
 } // namespace visLib
 
 #endif // _WIN32

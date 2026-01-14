@@ -2,14 +2,13 @@
 
 #include "utils/visLib/d3d12/internal/D3D12Common.h"
 #include "D3D12Text.h"
-#include "utils/visLib/d3d12/internal/SwapChain.h"
+#include "utils/visLib/d3d12/internal/D3D12SwapChain.h"
 #include "utils/visLib/d3d12/internal/DirectXHelpers.h"
 #include "utils/visLib/d3d12/internal/CD3DX12.h"
 #include <cstdarg>
 #include <algorithm>
 
 namespace visLib {
-namespace d3d12 {
 
 //=============================================================================
 // D3D12TextLine implementation
@@ -434,7 +433,7 @@ void D3D12Text::render(
 }
 
 void D3D12Text::render(
-    SwapChain* pSwapChain,
+    D3D12SwapChain* pSwapChain,
     ID3D12RootSignature* pRootSignature,
     ID3D12GraphicsCommandList* pCmdList)
 {
@@ -456,7 +455,6 @@ void D3D12Text::render(
     render(target, pRootSignature, pCmdList);
 }
 
-} // namespace d3d12
 } // namespace visLib
 
 #endif // _WIN32

@@ -1,7 +1,7 @@
 #ifdef _WIN32
 
 #include "D3D12Common.h"
-#include "ShaderHelper.h"
+#include "D3D12ShaderHelper.h"
 #include "DirectXHelpers.h"
 #include "utils/fileUtils/fileUtils.h"
 #include <fstream>
@@ -10,15 +10,14 @@
 #include <filesystem>
 
 namespace visLib {
-namespace d3d12 {
 
-ShaderHelper& ShaderHelper::getInstance()
+D3D12ShaderHelper& D3D12ShaderHelper::getInstance()
 {
-    static ShaderHelper instance;
+    static D3D12ShaderHelper instance;
     return instance;
 }
 
-Microsoft::WRL::ComPtr<ID3DBlob> ShaderHelper::loadShader(
+Microsoft::WRL::ComPtr<ID3DBlob> D3D12ShaderHelper::loadShader(
     const std::wstring& filePath,
     const std::string& entryPoint,
     const std::string& target,
@@ -26,14 +25,14 @@ Microsoft::WRL::ComPtr<ID3DBlob> ShaderHelper::loadShader(
 {
     // Create a unique key for the shader
     std::wstring shaderKey = filePath + L":" + std::wstring(entryPoint.begin(), entryPoint.end()) + L":" + std::wstring(target.begin(), target.end());
-    
+
     // Check if already loaded
     auto it = m_shaderCache.find(shaderKey);
     if (it != m_shaderCache.end())
     {
         return it->second;
     }
-    
+
     // Find the shader file
     std::filesystem::path foundPath;
     if (!FileUtils::findTheFile(filePath, foundPath))
@@ -41,11 +40,11 @@ Microsoft::WRL::ComPtr<ID3DBlob> ShaderHelper::loadShader(
         std::filesystem::path pathObj(filePath);
         throw std::runtime_error("Failed to find shader file: " + pathObj.string());
     }
-    
+
     // Compile shader
     Microsoft::WRL::ComPtr<ID3DBlob> shaderBlob;
     Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
-    
+
     HRESULT hr = D3DCompileFromFile(
         foundPath.c_str(),
         nullptr,
@@ -56,7 +55,7 @@ Microsoft::WRL::ComPtr<ID3DBlob> ShaderHelper::loadShader(
         0,
         &shaderBlob,
         &errorBlob);
-    
+
     if (FAILED(hr))
     {
         if (errorBlob)
@@ -65,14 +64,14 @@ Microsoft::WRL::ComPtr<ID3DBlob> ShaderHelper::loadShader(
         }
         ThrowIfFailed(hr);
     }
-    
+
     // Cache the shader
     m_shaderCache[shaderKey] = shaderBlob;
-    
+
     return shaderBlob;
 }
 
-Microsoft::WRL::ComPtr<ID3DBlob> ShaderHelper::loadCompiledShader(const std::wstring& filePath)
+Microsoft::WRL::ComPtr<ID3DBlob> D3D12ShaderHelper::loadCompiledShader(const std::wstring& filePath)
 {
     // Check if already loaded
     auto it = m_shaderCache.find(filePath);
@@ -80,33 +79,32 @@ Microsoft::WRL::ComPtr<ID3DBlob> ShaderHelper::loadCompiledShader(const std::wst
     {
         return it->second;
     }
-    
+
     // Find the shader file
     std::filesystem::path foundPath;
     if (!FileUtils::findTheFile(filePath, foundPath))
     {
         return nullptr;
     }
-    
+
     // Load the shader
     Microsoft::WRL::ComPtr<ID3DBlob> shaderBlob;
     if (FAILED(D3DReadFileToBlob(foundPath.c_str(), &shaderBlob)))
     {
         return nullptr;
     }
-    
+
     // Cache the shader
     m_shaderCache[filePath] = shaderBlob;
-    
+
     return shaderBlob;
 }
 
-void ShaderHelper::clearCache()
+void D3D12ShaderHelper::clearCache()
 {
     m_shaderCache.clear();
 }
 
-} // namespace d3d12
 } // namespace visLib
 
 #endif // _WIN32

@@ -9,7 +9,7 @@
 #include "utils/visLib/d3d12/D3D12Text.h"
 #include "utils/visLib/d3d12/internal/DirectXHelpers.h"
 #include "utils/visLib/d3d12/internal/CD3DX12.h"
-#include "utils/visLib/d3d12/internal/ShaderHelper.h"
+#include "utils/visLib/d3d12/internal/D3D12ShaderHelper.h"
 #include "utils/log/ILog.h"
 #include <cmath>
 
@@ -90,10 +90,10 @@ void OpenXRRenderer::initializeRenderResources()
     rootSignatureDesc.Init(_countof(rootParameters), rootParameters, 1, &sampler,
                            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
-    m_pRootSignature = d3d12::CreateRootSignature(pDevice, rootSignatureDesc);
+    m_pRootSignature = CreateRootSignature(pDevice, rootSignatureDesc);
 
     // Load shaders
-    d3d12::ShaderHelper& shaderHelper = d3d12::ShaderHelper::getInstance();
+    D3D12ShaderHelper& shaderHelper = D3D12ShaderHelper::getInstance();
 
 #if defined(_DEBUG)
     UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
@@ -166,7 +166,7 @@ void OpenXRRenderer::initializeRenderResources()
 
     // Create transform constant buffer
     const UINT constantBufferSize = (sizeof(TransformBuffer) + 255) & ~255;
-    m_pTransformBuffer = d3d12::CreateBuffer(pDevice, constantBufferSize,
+    m_pTransformBuffer = CreateBuffer(pDevice, constantBufferSize,
                                               D3D12_RESOURCE_FLAG_NONE,
                                               D3D12_RESOURCE_STATE_GENERIC_READ);
 
@@ -250,13 +250,13 @@ void OpenXRRenderer::initializeRenderResources()
                                         m_pDSVHeap->GetCPUDescriptorHandleForHeapStart());
     }
 
-    // Create GPUQueue for font texture uploads
-    m_pGPUQueue = std::make_shared<d3d12::GPUQueue>(pDevice);
+    // Create D3D12Queue for font texture uploads
+    m_pGPUQueue = std::make_shared<D3D12Queue>(pDevice);
 }
 
 std::shared_ptr<IMesh> OpenXRRenderer::createMesh()
 {
-    return std::make_shared<d3d12::D3D12Mesh>(m_pWindow->getDevice());
+    return std::make_shared<D3D12Mesh>(m_pWindow->getDevice());
 }
 
 std::shared_ptr<IFont> OpenXRRenderer::createFont(uint32_t fontSize)
@@ -265,17 +265,18 @@ std::shared_ptr<IFont> OpenXRRenderer::createFont(uint32_t fontSize)
     {
         return nullptr;
     }
-    return std::make_shared<d3d12::D3D12Font>(fontSize, m_pGPUQueue.get());
+    DXGI_FORMAT rtvFormat = m_session ? m_session->getSwapchainFormat() : DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    return std::make_shared<D3D12Font>(fontSize, m_pGPUQueue.get(), rtvFormat);
 }
 
 std::shared_ptr<IText> OpenXRRenderer::createText(std::shared_ptr<IFont> font)
 {
-    auto d3d12Font = std::dynamic_pointer_cast<d3d12::D3D12Font>(font);
+    auto d3d12Font = std::dynamic_pointer_cast<D3D12Font>(font);
     if (!d3d12Font)
     {
         return nullptr;
     }
-    auto text = std::make_shared<d3d12::D3D12Text>(d3d12Font);
+    auto text = std::make_shared<D3D12Text>(d3d12Font);
     m_textObjects.push_back(text);
     return text;
 }
@@ -391,7 +392,14 @@ box3 OpenXRRenderer::render()
         // Create RTV for this swapchain image
         UINT rtvDescriptorSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
         CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart(), eye, rtvDescriptorSize);
-        pDevice->CreateRenderTargetView(renderTarget, nullptr, rtvHandle);
+
+        // Must specify format explicitly - swapchain may use typeless format
+        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+        rtvDesc.Format = m_session->getSwapchainFormat();
+        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+        rtvDesc.Texture2D.MipSlice = 0;
+        rtvDesc.Texture2D.PlaneSlice = 0;
+        pDevice->CreateRenderTargetView(renderTarget, &rtvDesc, rtvHandle);
 
         renderEye(eye, viewMatrix, projMatrix, renderTarget, sceneBoundingBox);
 
@@ -532,7 +540,7 @@ void OpenXRRenderer::renderMeshNode(const MeshNode& node, const affine3& parentT
     for (const auto& pMesh : meshes) {
         if (!pMesh) continue;
 
-        auto pD3D12Mesh = std::dynamic_pointer_cast<d3d12::D3D12Mesh>(pMesh);
+        auto pD3D12Mesh = std::dynamic_pointer_cast<D3D12Mesh>(pMesh);
         if (!pD3D12Mesh || pD3D12Mesh->isEmpty()) continue;
 
         // Set world matrix

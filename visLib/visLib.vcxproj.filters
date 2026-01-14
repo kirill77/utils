@@ -85,13 +85,13 @@
     <ClInclude Include="d3d12\internal\DirectXHelpers.h">
       <Filter>d3d12\internal</Filter>
     </ClInclude>
-    <ClInclude Include="d3d12\internal\GPUQueue.h">
+    <ClInclude Include="d3d12\internal\D3D12Queue.h">
       <Filter>d3d12\internal</Filter>
     </ClInclude>
-    <ClInclude Include="d3d12\internal\ShaderHelper.h">
+    <ClInclude Include="d3d12\internal\D3D12ShaderHelper.h">
       <Filter>d3d12\internal</Filter>
     </ClInclude>
-    <ClInclude Include="d3d12\internal\SwapChain.h">
+    <ClInclude Include="d3d12\internal\D3D12SwapChain.h">
       <Filter>d3d12\internal</Filter>
     </ClInclude>
   </ItemGroup>
@@ -139,13 +139,13 @@
     <ClCompile Include="d3d12\D3D12Window.cpp">
       <Filter>d3d12</Filter>
     </ClCompile>
-    <ClCompile Include="d3d12\internal\GPUQueue.cpp">
+    <ClCompile Include="d3d12\internal\D3D12Queue.cpp">
       <Filter>d3d12\internal</Filter>
     </ClCompile>
-    <ClCompile Include="d3d12\internal\ShaderHelper.cpp">
+    <ClCompile Include="d3d12\internal\D3D12ShaderHelper.cpp">
       <Filter>d3d12\internal</Filter>
     </ClCompile>
-    <ClCompile Include="d3d12\internal\SwapChain.cpp">
+    <ClCompile Include="d3d12\internal\D3D12SwapChain.cpp">
       <Filter>d3d12\internal</Filter>
     </ClCompile>
   </ItemGroup>

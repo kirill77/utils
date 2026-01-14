@@ -4,7 +4,6 @@
 #include "D3D12InputState.h"
 
 namespace visLib {
-namespace d3d12 {
 
 D3D12InputState::D3D12InputState()
     : m_mousePosition(0.0f, 0.0f)
@@ -190,7 +189,6 @@ Key D3D12InputState::vkToKey(WPARAM vkCode)
     }
 }
 
-} // namespace d3d12
 } // namespace visLib
 
 #endif // _WIN32

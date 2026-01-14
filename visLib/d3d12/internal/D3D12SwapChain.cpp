@@ -1,15 +1,14 @@
 #ifdef _WIN32
 
 #include "D3D12Common.h"
-#include "SwapChain.h"
+#include "D3D12SwapChain.h"
 #include "DirectXHelpers.h"
 #include <dxgi1_6.h>
 #include <stdexcept>
 
 namespace visLib {
-namespace d3d12 {
 
-SwapChain::SwapChain(ID3D12Device* pDevice, HWND hWnd)
+D3D12SwapChain::D3D12SwapChain(ID3D12Device* pDevice, HWND hWnd)
     : m_pDevice(pDevice), m_hWnd(hWnd)
 {
     // Get descriptor sizes
@@ -50,8 +49,8 @@ SwapChain::SwapChain(ID3D12Device* pDevice, HWND hWnd)
     hr = CreateDXGIFactory2(0, IID_PPV_ARGS(&factory));
     if (FAILED(hr)) throw std::runtime_error("Failed to create DXGI factory");
 
-    // Create GPUQueue (which creates and manages the command queue)
-    m_pGPUQueue = std::make_shared<GPUQueue>(m_pDevice);
+    // Create D3D12Queue (which creates and manages the command queue)
+    m_pQueue = std::make_shared<D3D12Queue>(m_pDevice);
 
     // Create swap chain
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
@@ -69,7 +68,7 @@ SwapChain::SwapChain(ID3D12Device* pDevice, HWND hWnd)
     swapChainDesc.Flags = 0;
 
     Microsoft::WRL::ComPtr<IDXGISwapChain1> swapChain1;
-    hr = factory->CreateSwapChainForHwnd(m_pGPUQueue->getQueue(), m_hWnd, &swapChainDesc, nullptr, nullptr, &swapChain1);
+    hr = factory->CreateSwapChainForHwnd(m_pQueue->getQueue(), m_hWnd, &swapChainDesc, nullptr, nullptr, &swapChain1);
     if (FAILED(hr)) throw std::runtime_error("Failed to create swap chain");
 
     hr = swapChain1.As(&m_pSwapChain);
@@ -80,17 +79,17 @@ SwapChain::SwapChain(ID3D12Device* pDevice, HWND hWnd)
     createDepthBuffer();
 }
 
-IDXGISwapChain4* SwapChain::getSwapChain()
+IDXGISwapChain4* D3D12SwapChain::getSwapChain()
 {
     return m_pSwapChain.Get();
 }
 
-ID3D12CommandQueue* SwapChain::getCommandQueue()
+ID3D12CommandQueue* D3D12SwapChain::getCommandQueue()
 {
-    return m_pGPUQueue->getQueue();
+    return m_pQueue->getQueue();
 }
 
-void SwapChain::notifyWindowResized()
+void D3D12SwapChain::notifyWindowResized()
 {
     // Release existing resources
     releaseBackBufferResources();
@@ -110,13 +109,13 @@ void SwapChain::notifyWindowResized()
     createDepthBuffer();
 }
 
-ID3D12Resource* SwapChain::getBBColor()
+ID3D12Resource* D3D12SwapChain::getBBColor()
 {
     UINT currentBackBufferIndex = m_pSwapChain->GetCurrentBackBufferIndex();
     return m_pBackBuffers[currentBackBufferIndex].Get();
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE SwapChain::getBBColorCPUHandle()
+D3D12_CPU_DESCRIPTOR_HANDLE D3D12SwapChain::getBBColorCPUHandle()
 {
     UINT currentBackBufferIndex = m_pSwapChain->GetCurrentBackBufferIndex();
     D3D12_CPU_DESCRIPTOR_HANDLE handle = m_pRTVHeap->GetCPUDescriptorHandleForHeapStart();
@@ -124,7 +123,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE SwapChain::getBBColorCPUHandle()
     return handle;
 }
 
-D3D12_GPU_DESCRIPTOR_HANDLE SwapChain::getBBColorGPUHandle()
+D3D12_GPU_DESCRIPTOR_HANDLE D3D12SwapChain::getBBColorGPUHandle()
 {
     UINT currentBackBufferIndex = m_pSwapChain->GetCurrentBackBufferIndex();
     D3D12_GPU_DESCRIPTOR_HANDLE handle = m_pSRVHeap->GetGPUDescriptorHandleForHeapStart();
@@ -132,24 +131,24 @@ D3D12_GPU_DESCRIPTOR_HANDLE SwapChain::getBBColorGPUHandle()
     return handle;
 }
 
-ID3D12Resource* SwapChain::getBBDepth()
+ID3D12Resource* D3D12SwapChain::getBBDepth()
 {
     return m_pDepthBuffer.Get();
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE SwapChain::getBBDepthCPUHandle()
+D3D12_CPU_DESCRIPTOR_HANDLE D3D12SwapChain::getBBDepthCPUHandle()
 {
     return m_pDSVHeap->GetCPUDescriptorHandleForHeapStart();
 }
 
-D3D12_GPU_DESCRIPTOR_HANDLE SwapChain::getBBDepthGPUHandle()
+D3D12_GPU_DESCRIPTOR_HANDLE D3D12SwapChain::getBBDepthGPUHandle()
 {
     D3D12_GPU_DESCRIPTOR_HANDLE handle = m_pSRVHeap->GetGPUDescriptorHandleForHeapStart();
     handle.ptr += m_backBufferCount * m_srvDescriptorSize; // Depth SRV is after color SRVs
     return handle;
 }
 
-void SwapChain::createBackBufferResources()
+void D3D12SwapChain::createBackBufferResources()
 {
     D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_pRTVHeap->GetCPUDescriptorHandleForHeapStart();
     D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_pSRVHeap->GetCPUDescriptorHandleForHeapStart();
@@ -177,7 +176,7 @@ void SwapChain::createBackBufferResources()
     }
 }
 
-void SwapChain::createDepthBuffer()
+void D3D12SwapChain::createDepthBuffer()
 {
     // Get window dimensions
     RECT clientRect;
@@ -236,7 +235,7 @@ void SwapChain::createDepthBuffer()
     m_pDevice->CreateShaderResourceView(m_pDepthBuffer.Get(), &srvDesc, srvHandle);
 }
 
-void SwapChain::releaseBackBufferResources()
+void D3D12SwapChain::releaseBackBufferResources()
 {
     for (UINT i = 0; i < m_backBufferCount; ++i)
     {
@@ -245,7 +244,6 @@ void SwapChain::releaseBackBufferResources()
     m_pDepthBuffer.Reset();
 }
 
-} // namespace d3d12
 } // namespace visLib
 
 #endif // _WIN32

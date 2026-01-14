@@ -13,7 +13,7 @@ namespace visLib {
 namespace openxr {
 
 OpenXRWindow::OpenXRWindow(const WindowConfig& config)
-    : m_inputState(std::make_unique<d3d12::D3D12InputState>())
+    : m_inputState(std::make_unique<D3D12InputState>())
 {
     (void)config;  // VR ignores window config (no desktop window)
 

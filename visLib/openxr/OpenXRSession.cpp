@@ -478,9 +478,27 @@ ID3D12Resource* OpenXRSession::getSwapchainImage(int eye, uint32_t imageIndex) c
     return m_swapchains[eye].images[imageIndex].texture;
 }
 
+// Convert typeless formats to typed equivalents for RTV creation
+static DXGI_FORMAT resolveTypelessFormat(DXGI_FORMAT format)
+{
+    switch (format) {
+    case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+        return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+        return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+    case DXGI_FORMAT_R10G10B10A2_TYPELESS:
+        return DXGI_FORMAT_R10G10B10A2_UNORM;
+    case DXGI_FORMAT_R16G16B16A16_TYPELESS:
+        return DXGI_FORMAT_R16G16B16A16_FLOAT;
+    default:
+        return format;
+    }
+}
+
 DXGI_FORMAT OpenXRSession::getSwapchainFormat() const
 {
-    return static_cast<DXGI_FORMAT>(m_swapchains[0].format);
+    DXGI_FORMAT format = static_cast<DXGI_FORMAT>(m_swapchains[0].format);
+    return resolveTypelessFormat(format);
 }
 
 } // namespace openxr

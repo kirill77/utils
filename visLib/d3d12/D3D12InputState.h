@@ -7,7 +7,6 @@
 #include <array>
 
 namespace visLib {
-namespace d3d12 {
 
 // D3D12InputState - Win32 implementation of InputState interface
 class D3D12InputState : public InputState
@@ -52,7 +51,6 @@ private:
     bool m_firstFrame;
 };
 
-} // namespace d3d12
 } // namespace visLib
 
 #endif // _WIN32

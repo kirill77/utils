@@ -10,10 +10,9 @@
 #include <ctime>
 
 namespace visLib {
-namespace d3d12 {
 
 // Forward declarations
-class SwapChain;
+class D3D12SwapChain;
 
 // D3D12TextLine - D3D12 implementation of TextLine
 class D3D12TextLine : public TextLine
@@ -59,7 +58,7 @@ public:
                 ID3D12RootSignature* pRootSignature,
                 ID3D12GraphicsCommandList* pCmdList);
 
-    void render(SwapChain* pSwapChain,
+    void render(D3D12SwapChain* pSwapChain,
                 ID3D12RootSignature* pRootSignature,
                 ID3D12GraphicsCommandList* pCmdList);
 
@@ -109,7 +108,6 @@ private:
     uint8_t* m_constantBufferData = nullptr;
 };
 
-} // namespace d3d12
 } // namespace visLib
 
 #endif // _WIN32

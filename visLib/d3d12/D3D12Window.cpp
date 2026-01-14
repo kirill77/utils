@@ -6,7 +6,6 @@
 #include <stdexcept>
 
 namespace visLib {
-namespace d3d12 {
 
 D3D12Window::D3D12Window(const WindowConfig& config)
     : m_inputState(std::make_unique<D3D12InputState>())
@@ -212,8 +211,8 @@ bool D3D12Window::initDirectX()
         ThrowIfFailed(D3D12CreateDevice(hardwareAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device)));
     }
 
-    // Create SwapChain
-    m_pSwapChain = std::make_shared<SwapChain>(m_device.Get(), m_hwnd);
+    // Create D3D12SwapChain
+    m_pSwapChain = std::make_shared<D3D12SwapChain>(m_device.Get(), m_hwnd);
 
     // Disable Alt+Enter fullscreen toggle
     ThrowIfFailed(dxgiFactory->MakeWindowAssociation(m_hwnd, DXGI_MWA_NO_ALT_ENTER));
@@ -278,10 +277,10 @@ void D3D12Window::onWindowResize(uint32_t width, uint32_t height)
     if (m_pSwapChain)
     {
         // Wait for GPU to complete all operations
-        GPUQueue* gpuQueue = m_pSwapChain->getGPUQueue().get();
-        if (gpuQueue)
+        D3D12Queue* pQueue = m_pSwapChain->getQueue().get();
+        if (pQueue)
         {
-            gpuQueue->flush();
+            pQueue->flush();
         }
 
         // Resize swap chain buffers
@@ -339,8 +338,6 @@ LRESULT CALLBACK D3D12Window::WindowProc(HWND hwnd, UINT message, WPARAM wParam,
     return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-} // namespace d3d12
-
 // Factory function implementation
 std::unique_ptr<IWindow> createWindow(const WindowConfig& config)
 {
@@ -358,7 +355,7 @@ std::unique_ptr<IWindow> createWindow(const WindowConfig& config)
         // Fall through to desktop window if VR failed
     }
 
-    return std::make_unique<d3d12::D3D12Window>(config);
+    return std::make_unique<D3D12Window>(config);
 }
 
 } // namespace visLib

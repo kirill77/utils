@@ -2,21 +2,21 @@
 
 #include "utils/visLib/d3d12/internal/D3D12Common.h"
 #include "D3D12Font.h"
-#include "utils/visLib/d3d12/internal/GPUQueue.h"
+#include "utils/visLib/d3d12/internal/D3D12Queue.h"
 #include "utils/visLib/d3d12/internal/DirectXHelpers.h"
 #include "utils/visLib/d3d12/internal/CD3DX12.h"
-#include "utils/visLib/d3d12/internal/ShaderHelper.h"
+#include "utils/visLib/d3d12/internal/D3D12ShaderHelper.h"
 
 // Include stb_truetype
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "utils/stb/stb_truetype.h"
 
 namespace visLib {
-namespace d3d12 {
 
-D3D12Font::D3D12Font(uint32_t fontSize, GPUQueue* pQueue)
+D3D12Font::D3D12Font(uint32_t fontSize, D3D12Queue* pQueue, DXGI_FORMAT rtvFormat)
     : m_fontSize(static_cast<float>(fontSize))
     , m_device(pQueue->getDevice())
+    , m_rtvFormat(rtvFormat)
 {
     // Atlas dimensions
     const int ATLAS_WIDTH = 1024;
@@ -224,7 +224,7 @@ void D3D12Font::createPSO(ID3D12RootSignature* pRootSignature)
         return; // Already created
     
     // Load text rendering shaders
-    ShaderHelper& shaderHelper = ShaderHelper::getInstance();
+    D3D12ShaderHelper& shaderHelper = D3D12ShaderHelper::getInstance();
     
 #if defined(_DEBUG)
     UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
@@ -319,7 +319,7 @@ void D3D12Font::createPSO(ID3D12RootSignature* pRootSignature)
     
     // Render target format
     psoDesc.NumRenderTargets = 1;
-    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    psoDesc.RTVFormats[0] = m_rtvFormat;
     psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     
     // MSAA
@@ -337,7 +337,6 @@ void D3D12Font::createPSO(ID3D12RootSignature* pRootSignature)
     ThrowIfFailed(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_textPSO)));
 }
 
-} // namespace d3d12
 } // namespace visLib
 
 #endif // _WIN32

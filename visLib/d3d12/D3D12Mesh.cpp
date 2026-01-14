@@ -7,7 +7,6 @@
 #include <stdexcept>
 
 namespace visLib {
-namespace d3d12 {
 
 D3D12Mesh::D3D12Mesh(Microsoft::WRL::ComPtr<ID3D12Device> device)
     : m_device(device)
@@ -139,7 +138,6 @@ void D3D12Mesh::setGeometry(
     }
 }
 
-} // namespace d3d12
 } // namespace visLib
 
 #endif // _WIN32

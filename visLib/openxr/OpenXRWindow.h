@@ -52,7 +52,7 @@ private:
     bool m_vrReady = false;
     std::string m_lastError;
 
-    std::unique_ptr<d3d12::D3D12InputState> m_inputState;
+    std::unique_ptr<D3D12InputState> m_inputState;
 
     // D3D12 resources (owned by this window for VR)
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;

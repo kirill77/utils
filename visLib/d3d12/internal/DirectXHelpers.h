@@ -8,7 +8,6 @@
 #include <string>
 
 namespace visLib {
-namespace d3d12 {
 
 // Throw an exception for a failed HRESULT
 inline void ThrowIfFailed(HRESULT hr)
@@ -129,7 +128,6 @@ inline Microsoft::WRL::ComPtr<ID3DBlob> CompileShader(
     return shaderBlob;
 }
 
-} // namespace d3d12
 } // namespace visLib
 
 #endif // _WIN32

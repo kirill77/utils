@@ -172,9 +172,9 @@
     <ClInclude Include="d3d12\internal\D3D12Common.h" />
     <ClInclude Include="d3d12\internal\CD3DX12.h" />
     <ClInclude Include="d3d12\internal\DirectXHelpers.h" />
-    <ClInclude Include="d3d12\internal\GPUQueue.h" />
-    <ClInclude Include="d3d12\internal\ShaderHelper.h" />
-    <ClInclude Include="d3d12\internal\SwapChain.h" />
+    <ClInclude Include="d3d12\internal\D3D12Queue.h" />
+    <ClInclude Include="d3d12\internal\D3D12ShaderHelper.h" />
+    <ClInclude Include="d3d12\internal\D3D12SwapChain.h" />
   </ItemGroup>
   <!-- OpenXR Backend Headers (VR support) -->
   <ItemGroup>
@@ -196,9 +196,9 @@
     <ClCompile Include="d3d12\D3D12Renderer.cpp" />
     <ClCompile Include="d3d12\D3D12Text.cpp" />
     <ClCompile Include="d3d12\D3D12Window.cpp" />
-    <ClCompile Include="d3d12\internal\GPUQueue.cpp" />
-    <ClCompile Include="d3d12\internal\ShaderHelper.cpp" />
-    <ClCompile Include="d3d12\internal\SwapChain.cpp" />
+    <ClCompile Include="d3d12\internal\D3D12Queue.cpp" />
+    <ClCompile Include="d3d12\internal\D3D12ShaderHelper.cpp" />
+    <ClCompile Include="d3d12\internal\D3D12SwapChain.cpp" />
   </ItemGroup>
   <!-- OpenXR Backend Source Files (VR support) -->
   <ItemGroup>

@@ -7,16 +7,15 @@
 #include <unordered_map>
 
 namespace visLib {
-namespace d3d12 {
 
 // Forward declarations
-class GPUQueue;
+class D3D12Queue;
 
 // D3D12Font - D3D12 implementation of IFont interface
 class D3D12Font : public IFont, public std::enable_shared_from_this<D3D12Font>
 {
 public:
-    D3D12Font(uint32_t fontSize, GPUQueue* pQueue);
+    D3D12Font(uint32_t fontSize, D3D12Queue* pQueue, DXGI_FORMAT rtvFormat);
     ~D3D12Font() override = default;
 
     // IFont interface implementation
@@ -39,9 +38,9 @@ private:
     std::unordered_map<char, GlyphInfo> m_glyphMap;
     float m_fontSize;
     float m_lineHeight;
+    DXGI_FORMAT m_rtvFormat;
 };
 
-} // namespace d3d12
 } // namespace visLib
 
 #endif // _WIN32

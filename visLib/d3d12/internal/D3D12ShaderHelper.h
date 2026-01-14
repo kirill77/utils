@@ -7,13 +7,12 @@
 #include <string>
 
 namespace visLib {
-namespace d3d12 {
 
-// ShaderHelper - Singleton for shader loading and caching
-class ShaderHelper
+// D3D12ShaderHelper - Singleton for shader loading and caching
+class D3D12ShaderHelper
 {
 public:
-    static ShaderHelper& getInstance();
+    static D3D12ShaderHelper& getInstance();
 
     // Load and compile a shader from source file
     Microsoft::WRL::ComPtr<ID3DBlob> loadShader(
@@ -29,15 +28,14 @@ public:
     void clearCache();
 
 private:
-    ShaderHelper() = default;
-    ~ShaderHelper() = default;
-    ShaderHelper(const ShaderHelper&) = delete;
-    ShaderHelper& operator=(const ShaderHelper&) = delete;
+    D3D12ShaderHelper() = default;
+    ~D3D12ShaderHelper() = default;
+    D3D12ShaderHelper(const D3D12ShaderHelper&) = delete;
+    D3D12ShaderHelper& operator=(const D3D12ShaderHelper&) = delete;
 
     std::unordered_map<std::wstring, Microsoft::WRL::ComPtr<ID3DBlob>> m_shaderCache;
 };
 
-} // namespace d3d12
 } // namespace visLib
 
 #endif // _WIN32

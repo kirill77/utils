@@ -8,7 +8,7 @@
 namespace visLib {
 
 // Render target info for D3D12 rendering operations
-// Can be populated from SwapChain (desktop) or OpenXRSession (VR)
+// Can be populated from D3D12SwapChain (desktop) or OpenXRSession (VR)
 struct D3D12RenderTarget
 {
     uint32_t width = 0;

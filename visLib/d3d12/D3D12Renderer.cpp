@@ -5,11 +5,10 @@
 #include "utils/visLib/include/IVisObject.h"
 #include "utils/visLib/d3d12/internal/DirectXHelpers.h"
 #include "utils/visLib/d3d12/internal/CD3DX12.h"
-#include "utils/visLib/d3d12/internal/ShaderHelper.h"
+#include "utils/visLib/d3d12/internal/D3D12ShaderHelper.h"
 #include <DirectXMath.h>
 
 namespace visLib {
-namespace d3d12 {
 
 D3D12Renderer::D3D12Renderer(D3D12Window* pWindow, const RendererConfig& config)
     : m_pWindow(pWindow)
@@ -30,10 +29,10 @@ D3D12Renderer::~D3D12Renderer()
     // Wait for GPU before cleanup
     if (m_pWindow && m_pWindow->getSwapChain())
     {
-        auto gpuQueue = m_pWindow->getSwapChain()->getGPUQueue();
-        if (gpuQueue)
+        auto pQueue = m_pWindow->getSwapChain()->getQueue();
+        if (pQueue)
         {
-            gpuQueue->flush();
+            pQueue->flush();
         }
     }
 }
@@ -45,8 +44,9 @@ std::shared_ptr<IMesh> D3D12Renderer::createMesh()
 
 std::shared_ptr<IFont> D3D12Renderer::createFont(uint32_t fontSize)
 {
-    auto gpuQueue = m_pWindow->getSwapChain()->getGPUQueue();
-    return std::make_shared<D3D12Font>(fontSize, gpuQueue.get());
+    auto pQueue = m_pWindow->getSwapChain()->getQueue();
+    // Desktop swap chain uses UNORM format
+    return std::make_shared<D3D12Font>(fontSize, pQueue.get(), DXGI_FORMAT_R8G8B8A8_UNORM);
 }
 
 std::shared_ptr<IText> D3D12Renderer::createText(std::shared_ptr<IFont> font)
@@ -128,7 +128,7 @@ void D3D12Renderer::initializeRenderResources()
     m_pRootSignature = CreateRootSignature(pDevice, rootSignatureDesc);
 
     // Load shaders
-    ShaderHelper& shaderHelper = ShaderHelper::getInstance();
+    D3D12ShaderHelper& shaderHelper = D3D12ShaderHelper::getInstance();
 
 #if defined(_DEBUG)
     UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
@@ -247,8 +247,8 @@ void D3D12Renderer::initializeRenderResources()
 box3 D3D12Renderer::render()
 {
     auto pSwapChain = m_pWindow->getSwapChain();
-    auto gpuQueue = pSwapChain->getGPUQueue();
-    auto pCmdList = gpuQueue->beginRecording();
+    auto pQueue = pSwapChain->getQueue();
+    auto pCmdList = pQueue->beginRecording();
 
     // Get dimensions
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
@@ -371,7 +371,7 @@ box3 D3D12Renderer::render()
     pCmdList->ResourceBarrier(1, &barrier);
 
     // Execute
-    gpuQueue->execute(pCmdList);
+    pQueue->execute(pCmdList);
 
     // Return scene bounds
     if (!hasValidBounds)
@@ -456,24 +456,22 @@ void D3D12Renderer::waitForGPU()
     auto pSwapChain = m_pWindow->getSwapChain();
     if (pSwapChain)
     {
-        auto gpuQueue = pSwapChain->getGPUQueue();
-        if (gpuQueue)
+        auto pQueue = pSwapChain->getQueue();
+        if (pQueue)
         {
-            gpuQueue->flush();
+            pQueue->flush();
         }
     }
 }
-
-} // namespace d3d12
 
 // Factory function implementation
 std::unique_ptr<IRenderer> createRenderer(IWindow* window, const RendererConfig& config)
 {
     // Try D3D12 desktop window first
-    auto d3d12Window = dynamic_cast<d3d12::D3D12Window*>(window);
-    if (d3d12Window)
+    auto pD3D12Window = dynamic_cast<D3D12Window*>(window);
+    if (pD3D12Window)
     {
-        return std::make_unique<d3d12::D3D12Renderer>(d3d12Window, config);
+        return std::make_unique<D3D12Renderer>(pD3D12Window, config);
     }
 
     // Try OpenXR VR window

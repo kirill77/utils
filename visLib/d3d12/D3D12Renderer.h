@@ -9,12 +9,11 @@
 #include "D3D12Mesh.h"
 #include "D3D12Font.h"
 #include "D3D12Text.h"
-#include "utils/visLib/d3d12/internal/GPUQueue.h"
-#include "utils/visLib/d3d12/internal/SwapChain.h"
+#include "utils/visLib/d3d12/internal/D3D12Queue.h"
+#include "utils/visLib/d3d12/internal/D3D12SwapChain.h"
 #include <DirectXMath.h>
 
 namespace visLib {
-namespace d3d12 {
 
 // D3D12Renderer - D3D12 implementation of IRenderer interface
 class D3D12Renderer : public IRenderer
@@ -81,7 +80,6 @@ private:
     uint8_t* m_pMappedTransformBuffer = nullptr;
 };
 
-} // namespace d3d12
 } // namespace visLib
 
 #endif // _WIN32

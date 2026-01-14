@@ -6,7 +6,6 @@
 #include "utils/visLib/include/IMesh.h"
 
 namespace visLib {
-namespace d3d12 {
 
 // D3D12Mesh - D3D12 implementation of IMesh interface
 class D3D12Mesh : public IMesh
@@ -49,7 +48,6 @@ private:
     box3 m_boundingBox;
 };
 
-} // namespace d3d12
 } // namespace visLib
 
 #endif // _WIN32
