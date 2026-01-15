@@ -52,6 +52,7 @@ bool Win32InputWindow::createWindow(const Win32WindowConfig& config)
     windowClass.lpfnWndProc = Win32InputWindow::WindowProc;
     windowClass.hInstance = GetModuleHandle(NULL);
     windowClass.hCursor = LoadCursor(NULL, IDC_ARROW);
+    windowClass.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     windowClass.lpszClassName = L"visLibWin32InputWindowClass";
     RegisterClassEx(&windowClass);
 
@@ -107,6 +108,15 @@ void Win32InputWindow::setResizeCallback(ResizeCallback callback, void* userData
 {
     m_resizeCallback = callback;
     m_resizeUserData = userData;
+}
+
+void Win32InputWindow::setDisplayText(const std::string& text)
+{
+    m_displayText = text;
+    // Trigger repaint to show new text
+    if (m_hwnd) {
+        InvalidateRect(m_hwnd, NULL, TRUE);
+    }
 }
 
 void Win32InputWindow::onResize(uint32_t width, uint32_t height)
@@ -194,6 +204,38 @@ LRESULT CALLBACK Win32InputWindow::WindowProc(HWND hwnd, UINT message, WPARAM wP
             case WM_SIZE:
                 window->onResize(LOWORD(lParam), HIWORD(lParam));
                 return 0;
+
+            case WM_PAINT:
+                if (!window->m_displayText.empty()) {
+                    PAINTSTRUCT ps;
+                    HDC hdc = BeginPaint(hwnd, &ps);
+
+                    RECT rect;
+                    GetClientRect(hwnd, &rect);
+
+                    // Create large font (height ~120 pixels, ~10x default)
+                    HFONT hFont = CreateFontA(
+                        120, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+                    HFONT hOldFont = (HFONT)SelectObject(hdc, hFont);
+
+                    // Set up colors
+                    SetBkMode(hdc, TRANSPARENT);
+                    SetTextColor(hdc, RGB(0, 0, 0));
+
+                    // Draw centered text
+                    DrawTextA(hdc, window->m_displayText.c_str(), -1, &rect,
+                              DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+                    // Cleanup
+                    SelectObject(hdc, hOldFont);
+                    DeleteObject(hFont);
+
+                    EndPaint(hwnd, &ps);
+                    return 0;
+                }
+                break;  // Let DefWindowProc handle if no text
 
             case WM_KEYDOWN:
             case WM_KEYUP:

@@ -51,6 +51,9 @@ public:
     uint32_t getWidth() const { return m_width; }
     uint32_t getHeight() const { return m_height; }
 
+    // Display text (drawn via GDI when no D3D12 rendering)
+    void setDisplayText(const std::string& text);
+
     // Called when window is resized (can be overridden via callback)
     using ResizeCallback = void(*)(uint32_t width, uint32_t height, void* userData);
     void setResizeCallback(ResizeCallback callback, void* userData);
@@ -73,6 +76,9 @@ private:
     // Optional resize callback
     ResizeCallback m_resizeCallback = nullptr;
     void* m_resizeUserData = nullptr;
+
+    // Display text (for windows without D3D12 rendering)
+    std::string m_displayText;
 };
 
 } // namespace visLib

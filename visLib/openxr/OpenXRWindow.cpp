@@ -17,16 +17,19 @@ OpenXRWindow::OpenXRWindow(const WindowConfig& config)
     // Create companion desktop window for input
     Win32WindowConfig winConfig;
     winConfig.title = config.title + " [VR]";
-    winConfig.width = 640;   // Smaller companion window
-    winConfig.height = 480;
-    winConfig.resizable = false;
-    winConfig.fullscreen = false;
+    winConfig.width = config.width;
+    winConfig.height = config.height;
+    winConfig.resizable = config.resizable;
+    winConfig.fullscreen = config.fullscreen;
 
     m_companionWindow = std::make_unique<Win32InputWindow>(winConfig);
     if (!m_companionWindow->isValid()) {
         m_lastError = "Failed to create companion window";
         return;
     }
+
+    // Set display text for companion window
+    m_companionWindow->setDisplayText("VR Mode - Use this window for keyboard/mouse input");
 
     // Try to initialize OpenXR
     if (!tryInitializeOpenXR()) {
