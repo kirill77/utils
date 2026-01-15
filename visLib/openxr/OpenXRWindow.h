@@ -1,5 +1,5 @@
 // OpenXRWindow.h: IWindow implementation for VR headsets
-// Provides a virtual window that represents the VR display
+// Creates a desktop companion window for input and renders to VR headset via OpenXR
 
 #pragma once
 
@@ -15,7 +15,8 @@ namespace visLib {
 namespace openxr {
 
 // OpenXRWindow: IWindow implementation for VR
-// Does not create a desktop window; renders to VR headset via OpenXR
+// Creates a companion desktop window for keyboard/mouse input
+// Renders to VR headset via OpenXR
 class OpenXRWindow : public IWindow
 {
 public:
@@ -45,12 +46,22 @@ public:
     const std::string& getLastError() const { return m_lastError; }
 
 private:
+    bool createCompanionWindow(const WindowConfig& config);
     bool initializeD3D12();
     bool initializeOpenXR();
+    
+    // Window message handling
+    void handleInput(UINT message, WPARAM wParam, LPARAM lParam);
+    static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
     bool m_isOpen = false;
     bool m_vrReady = false;
     std::string m_lastError;
+
+    // Companion desktop window for input
+    HWND m_hwnd = nullptr;
+    uint32_t m_windowWidth = 640;
+    uint32_t m_windowHeight = 480;
 
     std::unique_ptr<D3D12InputState> m_inputState;
 
