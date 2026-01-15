@@ -4,7 +4,7 @@
 
 #include "utils/visLib/d3d12/internal/D3D12Common.h"
 #include "utils/visLib/include/IWindow.h"
-#include "D3D12InputState.h"
+#include "utils/visLib/common/Win32InputWindow.h"
 #include "utils/visLib/d3d12/internal/D3D12SwapChain.h"
 #include <memory>
 
@@ -29,27 +29,15 @@ public:
     // D3D12-specific accessors (used by D3D12Renderer)
     ID3D12Device* getDevice() const { return m_device.Get(); }
     D3D12SwapChain* getSwapChain() const { return m_pSwapChain.get(); }
-    
-    // Window resize handler
-    void onWindowResize(uint32_t width, uint32_t height);
-    
-    // Input handler for Win32 messages
-    void handleInput(UINT message, WPARAM wParam, LPARAM lParam);
 
 private:
-    bool createWindowAndDevice(const WindowConfig& config);
     bool initDirectX();
-    
-    static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+    static void onWindowResize(uint32_t width, uint32_t height, void* userData);
 
 private:
-    HWND m_hwnd = nullptr;
-    uint32_t m_width = 0;
-    uint32_t m_height = 0;
+    std::unique_ptr<Win32InputWindow> m_window;
     bool m_isOpen = false;
-    
-    std::unique_ptr<D3D12InputState> m_inputState;
-    
+
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;
     std::shared_ptr<D3D12SwapChain> m_pSwapChain;
 };

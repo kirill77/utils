@@ -5,7 +5,6 @@
 #include "OpenXRWindow.h"
 #include "OpenXRLoader.h"
 #include <dxgi1_6.h>
-#include <windowsx.h>
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -14,10 +13,17 @@ namespace visLib {
 namespace openxr {
 
 OpenXRWindow::OpenXRWindow(const WindowConfig& config)
-    : m_inputState(std::make_unique<D3D12InputState>())
 {
     // Create companion desktop window for input
-    if (!createCompanionWindow(config)) {
+    Win32WindowConfig winConfig;
+    winConfig.title = config.title + " [VR]";
+    winConfig.width = 640;   // Smaller companion window
+    winConfig.height = 480;
+    winConfig.resizable = false;
+    winConfig.fullscreen = false;
+
+    m_companionWindow = std::make_unique<Win32InputWindow>(winConfig);
+    if (!m_companionWindow->isValid()) {
         m_lastError = "Failed to create companion window";
         return;
     }
@@ -45,12 +51,6 @@ OpenXRWindow::OpenXRWindow(const WindowConfig& config)
 OpenXRWindow::~OpenXRWindow()
 {
     close();
-    
-    // Destroy companion window
-    if (m_hwnd) {
-        DestroyWindow(m_hwnd);
-        m_hwnd = nullptr;
-    }
 }
 
 bool OpenXRWindow::initializeD3D12()
@@ -122,7 +122,7 @@ bool OpenXRWindow::initializeOpenXR()
 
 bool OpenXRWindow::isOpen() const
 {
-    return m_isOpen;
+    return m_isOpen && !m_companionWindow->isCloseRequested();
 }
 
 void OpenXRWindow::close()
@@ -156,22 +156,8 @@ uint32_t OpenXRWindow::getHeight() const
 
 void OpenXRWindow::processEvents()
 {
-    // Begin new input frame
-    if (m_inputState) {
-        m_inputState->beginFrame();
-    }
-    
     // Process companion window messages (keyboard, mouse input)
-    MSG msg = {};
-    while (PeekMessage(&msg, m_hwnd, 0, 0, PM_REMOVE)) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-    }
-    
-    // End input frame
-    if (m_inputState) {
-        m_inputState->endFrame();
-    }
+    m_companionWindow->processMessages();
 
     // Poll OpenXR events (session state changes, etc.)
     if (m_session) {
@@ -183,152 +169,12 @@ void OpenXRWindow::processEvents()
 
 const InputState& OpenXRWindow::getInputState() const
 {
-    return *m_inputState;
+    return m_companionWindow->getInputState();
 }
 
 void* OpenXRWindow::getNativeHandle() const
 {
-    return m_hwnd;
-}
-
-bool OpenXRWindow::createCompanionWindow(const WindowConfig& config)
-{
-    // Register window class
-    WNDCLASSEX windowClass = {};
-    windowClass.cbSize = sizeof(WNDCLASSEX);
-    windowClass.style = CS_HREDRAW | CS_VREDRAW;
-    windowClass.lpfnWndProc = OpenXRWindow::WindowProc;
-    windowClass.hInstance = GetModuleHandle(NULL);
-    windowClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-    windowClass.lpszClassName = L"OpenXRCompanionWindowClass";
-    RegisterClassEx(&windowClass);
-
-    // Window style - simple, non-resizable
-    DWORD windowStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-
-    // Use smaller size for companion window
-    m_windowWidth = 640;
-    m_windowHeight = 480;
-
-    // Calculate window rect for client area size
-    RECT windowRect = { 0, 0, static_cast<LONG>(m_windowWidth), static_cast<LONG>(m_windowHeight) };
-    AdjustWindowRect(&windowRect, windowStyle, FALSE);
-
-    // Build title with VR indicator
-    std::string title = config.title + " [VR]";
-    std::wstring wideTitle(title.begin(), title.end());
-
-    // Create window
-    m_hwnd = CreateWindow(
-        windowClass.lpszClassName,
-        wideTitle.c_str(),
-        windowStyle,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        windowRect.right - windowRect.left,
-        windowRect.bottom - windowRect.top,
-        nullptr,
-        nullptr,
-        windowClass.hInstance,
-        this);
-
-    if (!m_hwnd) {
-        return false;
-    }
-
-    // Show the window
-    ShowWindow(m_hwnd, SW_SHOW);
-    
-    return true;
-}
-
-void OpenXRWindow::handleInput(UINT message, WPARAM wParam, LPARAM lParam)
-{
-    switch (message)
-    {
-        case WM_KEYDOWN:
-            m_inputState->onKeyDown(wParam);
-            break;
-        case WM_KEYUP:
-            m_inputState->onKeyUp(wParam);
-            break;
-        case WM_LBUTTONDOWN:
-            m_inputState->onMouseButton(Key::MouseLeft, true);
-            break;
-        case WM_LBUTTONUP:
-            m_inputState->onMouseButton(Key::MouseLeft, false);
-            break;
-        case WM_RBUTTONDOWN:
-            m_inputState->onMouseButton(Key::MouseRight, true);
-            break;
-        case WM_RBUTTONUP:
-            m_inputState->onMouseButton(Key::MouseRight, false);
-            break;
-        case WM_MBUTTONDOWN:
-            m_inputState->onMouseButton(Key::MouseMiddle, true);
-            break;
-        case WM_MBUTTONUP:
-            m_inputState->onMouseButton(Key::MouseMiddle, false);
-            break;
-        case WM_XBUTTONDOWN:
-            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1)
-                m_inputState->onMouseButton(Key::MouseX1, true);
-            else
-                m_inputState->onMouseButton(Key::MouseX2, true);
-            break;
-        case WM_XBUTTONUP:
-            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1)
-                m_inputState->onMouseButton(Key::MouseX1, false);
-            else
-                m_inputState->onMouseButton(Key::MouseX2, false);
-            break;
-        case WM_MOUSEMOVE:
-            m_inputState->onMouseMove(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
-            break;
-        case WM_MOUSEWHEEL:
-            m_inputState->onMouseWheel(static_cast<float>(GET_WHEEL_DELTA_WPARAM(wParam)) / WHEEL_DELTA);
-            break;
-    }
-}
-
-LRESULT CALLBACK OpenXRWindow::WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-    OpenXRWindow* window = nullptr;
-    
-    if (message == WM_NCCREATE) {
-        CREATESTRUCT* createStruct = reinterpret_cast<CREATESTRUCT*>(lParam);
-        window = reinterpret_cast<OpenXRWindow*>(createStruct->lpCreateParams);
-        SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(window));
-    }
-    else {
-        window = reinterpret_cast<OpenXRWindow*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
-    }
-
-    if (window) {
-        switch (message)
-        {
-            case WM_DESTROY:
-                window->m_isOpen = false;
-                return 0;
-                
-            case WM_KEYDOWN:
-            case WM_KEYUP:
-            case WM_LBUTTONDOWN:
-            case WM_LBUTTONUP:
-            case WM_RBUTTONDOWN:
-            case WM_RBUTTONUP:
-            case WM_MBUTTONDOWN:
-            case WM_MBUTTONUP:
-            case WM_XBUTTONDOWN:
-            case WM_XBUTTONUP:
-            case WM_MOUSEMOVE:
-            case WM_MOUSEWHEEL:
-                window->handleInput(message, wParam, lParam);
-                return 0;
-        }
-    }
-
-    return DefWindowProc(hwnd, message, wParam, lParam);
+    return m_companionWindow->getHandle();
 }
 
 } // namespace openxr

@@ -1,11 +1,10 @@
 #ifdef _WIN32
 
-#include "utils/visLib/d3d12/internal/D3D12Common.h"
-#include "D3D12InputState.h"
+#include "Win32InputState.h"
 
 namespace visLib {
 
-D3D12InputState::D3D12InputState()
+Win32InputState::Win32InputState()
     : m_mousePosition(0.0f, 0.0f)
     , m_mouseDelta(0.0f, 0.0f)
     , m_lastMousePosition(0.0f, 0.0f)
@@ -16,42 +15,42 @@ D3D12InputState::D3D12InputState()
     m_previousState.fill(false);
 }
 
-bool D3D12InputState::isKeyDown(Key key) const
+bool Win32InputState::isKeyDown(Key key) const
 {
     if (key == Key::Unknown || key >= Key::Count) return false;
     return m_currentState[static_cast<size_t>(key)];
 }
 
-bool D3D12InputState::isKeyPressed(Key key) const
+bool Win32InputState::isKeyPressed(Key key) const
 {
     if (key == Key::Unknown || key >= Key::Count) return false;
     size_t idx = static_cast<size_t>(key);
     return m_currentState[idx] && !m_previousState[idx];
 }
 
-bool D3D12InputState::isKeyReleased(Key key) const
+bool Win32InputState::isKeyReleased(Key key) const
 {
     if (key == Key::Unknown || key >= Key::Count) return false;
     size_t idx = static_cast<size_t>(key);
     return !m_currentState[idx] && m_previousState[idx];
 }
 
-float2 D3D12InputState::getMousePosition() const
+float2 Win32InputState::getMousePosition() const
 {
     return m_mousePosition;
 }
 
-float2 D3D12InputState::getMouseDelta() const
+float2 Win32InputState::getMouseDelta() const
 {
     return m_mouseDelta;
 }
 
-float D3D12InputState::getScrollDelta() const
+float Win32InputState::getScrollDelta() const
 {
     return m_scrollDelta;
 }
 
-void D3D12InputState::beginFrame()
+void Win32InputState::beginFrame()
 {
     // Save current state as previous
     m_previousState = m_currentState;
@@ -72,12 +71,12 @@ void D3D12InputState::beginFrame()
     m_scrollDelta = 0.0f;
 }
 
-void D3D12InputState::endFrame()
+void Win32InputState::endFrame()
 {
     // Nothing to do here currently
 }
 
-void D3D12InputState::onKeyDown(WPARAM vkCode)
+void Win32InputState::onKeyDown(WPARAM vkCode)
 {
     Key key = vkToKey(vkCode);
     if (key != Key::Unknown && key < Key::Count)
@@ -86,7 +85,7 @@ void D3D12InputState::onKeyDown(WPARAM vkCode)
     }
 }
 
-void D3D12InputState::onKeyUp(WPARAM vkCode)
+void Win32InputState::onKeyUp(WPARAM vkCode)
 {
     Key key = vkToKey(vkCode);
     if (key != Key::Unknown && key < Key::Count)
@@ -95,12 +94,12 @@ void D3D12InputState::onKeyUp(WPARAM vkCode)
     }
 }
 
-void D3D12InputState::onMouseMove(int x, int y)
+void Win32InputState::onMouseMove(int x, int y)
 {
     m_mousePosition = float2(static_cast<float>(x), static_cast<float>(y));
 }
 
-void D3D12InputState::onMouseButton(Key button, bool down)
+void Win32InputState::onMouseButton(Key button, bool down)
 {
     if (button >= Key::MouseLeft && button <= Key::MouseX2)
     {
@@ -108,12 +107,12 @@ void D3D12InputState::onMouseButton(Key button, bool down)
     }
 }
 
-void D3D12InputState::onMouseWheel(float delta)
+void Win32InputState::onMouseWheel(float delta)
 {
     m_scrollDelta += delta;
 }
 
-Key D3D12InputState::vkToKey(WPARAM vkCode)
+Key Win32InputState::vkToKey(WPARAM vkCode)
 {
     // Letters A-Z
     if (vkCode >= 'A' && vkCode <= 'Z')

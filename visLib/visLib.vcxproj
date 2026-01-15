@@ -149,6 +149,8 @@
   </ItemDefinitionGroup>
   <!-- Abstract Interface Headers -->
   <ItemGroup>
+    <ClInclude Include="common\Win32InputState.h" />
+    <ClInclude Include="common\Win32InputWindow.h" />
     <ClInclude Include="include\Camera.h" />
     <ClInclude Include="include\IFont.h" />
     <ClInclude Include="include\IMesh.h" />
@@ -164,7 +166,6 @@
   <!-- D3D12 Backend Headers -->
   <ItemGroup>
     <ClInclude Include="d3d12\D3D12Font.h" />
-    <ClInclude Include="d3d12\D3D12InputState.h" />
     <ClInclude Include="d3d12\D3D12Mesh.h" />
     <ClInclude Include="d3d12\D3D12Renderer.h" />
     <ClInclude Include="d3d12\D3D12Text.h" />
@@ -190,8 +191,9 @@
   </ItemGroup>
   <!-- D3D12 Backend Source Files -->
   <ItemGroup>
+    <ClCompile Include="common\Win32InputState.cpp" />
+    <ClCompile Include="common\Win32InputWindow.cpp" />
     <ClCompile Include="d3d12\D3D12Font.cpp" />
-    <ClCompile Include="d3d12\D3D12InputState.cpp" />
     <ClCompile Include="d3d12\D3D12Mesh.cpp" />
     <ClCompile Include="d3d12\D3D12Renderer.cpp" />
     <ClCompile Include="d3d12\D3D12Text.cpp" />

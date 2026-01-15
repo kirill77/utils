@@ -6,8 +6,7 @@
 #ifdef _WIN32
 
 #include "utils/visLib/include/IWindow.h"
-#include "utils/visLib/include/InputState.h"
-#include "utils/visLib/d3d12/D3D12InputState.h"
+#include "utils/visLib/common/Win32InputWindow.h"
 #include "OpenXRSession.h"
 #include <memory>
 
@@ -46,24 +45,15 @@ public:
     const std::string& getLastError() const { return m_lastError; }
 
 private:
-    bool createCompanionWindow(const WindowConfig& config);
     bool initializeD3D12();
     bool initializeOpenXR();
-    
-    // Window message handling
-    void handleInput(UINT message, WPARAM wParam, LPARAM lParam);
-    static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
     bool m_isOpen = false;
     bool m_vrReady = false;
     std::string m_lastError;
 
     // Companion desktop window for input
-    HWND m_hwnd = nullptr;
-    uint32_t m_windowWidth = 640;
-    uint32_t m_windowHeight = 480;
-
-    std::unique_ptr<D3D12InputState> m_inputState;
+    std::unique_ptr<Win32InputWindow> m_companionWindow;
 
     // D3D12 resources (owned by this window for VR)
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;

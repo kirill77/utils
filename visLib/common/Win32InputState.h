@@ -2,18 +2,27 @@
 
 #ifdef _WIN32
 
-#include "utils/visLib/d3d12/internal/D3D12Common.h"
+// Prevent Windows.h min/max macro conflicts
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
+#include <windows.h>
 #include "utils/visLib/include/InputState.h"
 #include <array>
 
 namespace visLib {
 
-// D3D12InputState - Win32 implementation of InputState interface
-class D3D12InputState : public InputState
+// Win32InputState - Win32 implementation of InputState interface
+// Handles keyboard and mouse input via Windows messages
+class Win32InputState : public InputState
 {
 public:
-    D3D12InputState();
-    ~D3D12InputState() override = default;
+    Win32InputState();
+    ~Win32InputState() override = default;
 
     // InputState interface implementation
     bool isKeyDown(Key key) const override;
@@ -23,7 +32,7 @@ public:
     float2 getMouseDelta() const override;
     float getScrollDelta() const override;
 
-    // Internal methods called by D3D12Window
+    // Frame management (call at start/end of each frame)
     void beginFrame();
     void endFrame();
     

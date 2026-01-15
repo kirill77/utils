@@ -55,13 +55,16 @@
     <ClInclude Include="include\visLib.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="common\Win32InputState.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\Win32InputWindow.h">
+      <Filter>common</Filter>
+    </ClInclude>
   </ItemGroup>
   <!-- D3D12 Backend Headers -->
   <ItemGroup>
     <ClInclude Include="d3d12\D3D12Font.h">
-      <Filter>d3d12</Filter>
-    </ClInclude>
-    <ClInclude Include="d3d12\D3D12InputState.h">
       <Filter>d3d12</Filter>
     </ClInclude>
     <ClInclude Include="d3d12\D3D12Mesh.h">
@@ -118,13 +121,16 @@
     <ClCompile Include="common\MeshNode.cpp">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="common\Win32InputState.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="common\Win32InputWindow.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
   </ItemGroup>
   <!-- D3D12 Backend Source Files -->
   <ItemGroup>
     <ClCompile Include="d3d12\D3D12Font.cpp">
-      <Filter>d3d12</Filter>
-    </ClCompile>
-    <ClCompile Include="d3d12\D3D12InputState.cpp">
       <Filter>d3d12</Filter>
     </ClCompile>
     <ClCompile Include="d3d12\D3D12Mesh.cpp">
