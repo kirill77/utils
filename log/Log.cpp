@@ -174,7 +174,7 @@ private:
     {
         // create prefix for the message
         std::time_t currentTime = m_bTimeOverride ? m_timeOverride : std::time(nullptr);
-        std::string sTime = TimeUtils::timeStampToString(currentTime);
+        std::string sTime = TimeUtils::timeStampToLocalString(currentTime);
         std::string finalMessage;
 
         if (m_bEnableThreadAndFileInfo)
