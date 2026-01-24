@@ -31,7 +31,8 @@ struct RenderStats {
 
 // Abstract renderer interface
 // Main facade for the visualization library
-class IRenderer {
+// Derives from enable_shared_from_this to allow safe shared_ptr creation from within methods
+class IRenderer : public std::enable_shared_from_this<IRenderer> {
 public:
     virtual ~IRenderer() = default;
 
@@ -97,6 +98,7 @@ public:
 // Implementation provided by the backend (visLib_d3d12, visLib_vulkan, etc.)
 // window: The window to render to (must remain valid for renderer lifetime)
 // config: Renderer configuration options
-std::unique_ptr<IRenderer> createRenderer(IWindow* window, const RendererConfig& config = {});
+// Returns shared_ptr to enable shared ownership and enable_shared_from_this
+std::shared_ptr<IRenderer> createRenderer(IWindow* window, const RendererConfig& config = {});
 
 } // namespace visLib

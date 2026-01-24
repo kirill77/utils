@@ -460,17 +460,17 @@ void D3D12Renderer::waitForGPU()
 }
 
 // Factory function implementation
-std::unique_ptr<IRenderer> createRenderer(IWindow* window, const RendererConfig& config)
+std::shared_ptr<IRenderer> createRenderer(IWindow* window, const RendererConfig& config)
 {
     // Try D3D12 desktop window first
     auto pD3D12Window = dynamic_cast<D3D12Window*>(window);
     if (pD3D12Window)
     {
-        return std::make_unique<D3D12Renderer>(pD3D12Window, config);
+        return std::make_shared<D3D12Renderer>(pD3D12Window, config);
     }
 
     // Try OpenXR VR window
-    extern std::unique_ptr<IRenderer> tryCreateOpenXRRenderer(IWindow* window, const RendererConfig& config);
+    extern std::shared_ptr<IRenderer> tryCreateOpenXRRenderer(IWindow* window, const RendererConfig& config);
     auto vrRenderer = tryCreateOpenXRRenderer(window, config);
     if (vrRenderer)
     {

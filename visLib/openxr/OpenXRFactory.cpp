@@ -36,7 +36,7 @@ std::unique_ptr<IWindow> tryCreateOpenXRWindow(const WindowConfig& config)
 
 // Factory function to try creating an OpenXR renderer for a VR window
 // Returns nullptr if the window is not an OpenXR window
-std::unique_ptr<IRenderer> tryCreateOpenXRRenderer(IWindow* window, const RendererConfig& config)
+std::shared_ptr<IRenderer> tryCreateOpenXRRenderer(IWindow* window, const RendererConfig& config)
 {
     auto vrWindow = dynamic_cast<openxr::OpenXRWindow*>(window);
     if (!vrWindow) {
@@ -47,7 +47,7 @@ std::unique_ptr<IRenderer> tryCreateOpenXRRenderer(IWindow* window, const Render
         return nullptr;
     }
 
-    return std::make_unique<openxr::OpenXRRenderer>(vrWindow, config);
+    return std::make_shared<openxr::OpenXRRenderer>(vrWindow, config);
 }
 
 } // namespace visLib
