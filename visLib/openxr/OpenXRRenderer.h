@@ -49,8 +49,11 @@ public:
     Camera& getCamera() override { return m_camera; }
     const Camera& getCamera() const override { return m_camera; }
 
+    // Frame tracking
+    uint64_t getCurrentFrameIndex() const override { return m_frameIndex; }
+
     // Rendering
-    box3 render() override;
+    box3 render(IQuery* query = nullptr) override;
     void present() override;
     void waitForGPU() override;
 
@@ -58,8 +61,8 @@ public:
     const RendererConfig& getConfig() const override { return m_config; }
     void setConfig(const RendererConfig& config) override;
 
-    // Statistics
-    RenderStats getLastFrameStats() const override { return m_lastStats; }
+    // Query factory method
+    std::shared_ptr<IQuery> createQuery(QueryCapability capabilities, uint32_t slotCount = 128) override;
 
     // Window access
     IWindow* getWindow() const override { return m_pWindow; }
@@ -85,7 +88,7 @@ private:
     OpenXRSession* m_session;
     RendererConfig m_config;
     Camera m_camera;
-    RenderStats m_lastStats;
+    uint64_t m_frameIndex = 0;
 
     std::vector<std::weak_ptr<IVisObject>> m_objects;
 

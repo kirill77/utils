@@ -162,6 +162,7 @@
     <ClInclude Include="include\MeshNode.h" />
     <ClInclude Include="include\Types.h" />
     <ClInclude Include="include\visLib.h" />
+    <ClInclude Include="include\IQuery.h" />
   </ItemGroup>
   <!-- D3D12 Backend Headers -->
   <ItemGroup>
@@ -170,6 +171,7 @@
     <ClInclude Include="d3d12\D3D12Renderer.h" />
     <ClInclude Include="d3d12\D3D12Text.h" />
     <ClInclude Include="d3d12\D3D12Window.h" />
+    <ClInclude Include="d3d12\D3D12Query.h" />
     <ClInclude Include="d3d12\internal\D3D12Common.h" />
     <ClInclude Include="d3d12\internal\CD3DX12.h" />
     <ClInclude Include="d3d12\internal\DirectXHelpers.h" />
@@ -198,6 +200,7 @@
     <ClCompile Include="d3d12\D3D12Renderer.cpp" />
     <ClCompile Include="d3d12\D3D12Text.cpp" />
     <ClCompile Include="d3d12\D3D12Window.cpp" />
+    <ClCompile Include="d3d12\D3D12Query.cpp" />
     <ClCompile Include="d3d12\internal\D3D12Queue.cpp" />
     <ClCompile Include="d3d12\internal\D3D12ShaderHelper.cpp" />
     <ClCompile Include="d3d12\internal\D3D12SwapChain.cpp" />

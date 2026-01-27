@@ -55,6 +55,9 @@
     <ClInclude Include="include\visLib.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\IQuery.h">
+      <Filter>include</Filter>
+    </ClInclude>
     <ClInclude Include="common\Win32InputState.h">
       <Filter>common</Filter>
     </ClInclude>
@@ -77,6 +80,9 @@
       <Filter>d3d12</Filter>
     </ClInclude>
     <ClInclude Include="d3d12\D3D12Window.h">
+      <Filter>d3d12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3d12\D3D12Query.h">
       <Filter>d3d12</Filter>
     </ClInclude>
     <ClInclude Include="d3d12\internal\D3D12Common.h">
@@ -143,6 +149,9 @@
       <Filter>d3d12</Filter>
     </ClCompile>
     <ClCompile Include="d3d12\D3D12Window.cpp">
+      <Filter>d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="d3d12\D3D12Query.cpp">
       <Filter>d3d12</Filter>
     </ClCompile>
     <ClCompile Include="d3d12\internal\D3D12Queue.cpp">

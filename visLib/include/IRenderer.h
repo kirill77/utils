@@ -2,6 +2,7 @@
 
 #include "Types.h"
 #include "Camera.h"
+#include "IQuery.h"
 #include <memory>
 #include <cstdint>
 
@@ -19,14 +20,6 @@ struct RendererConfig {
     bool enableDebugLayer = false;      // Enable graphics API debug validation
     bool wireframeMode = true;          // Render in wireframe (default for scientific vis)
     float4 clearColor = { 0.0f, 0.2f, 0.4f, 1.0f };  // Background color
-};
-
-// Statistics from the last rendered frame
-struct RenderStats {
-    uint32_t drawCalls = 0;
-    uint32_t trianglesRendered = 0;
-    uint32_t objectsRendered = 0;
-    float gpuTimeMs = 0.0f;
 };
 
 // Abstract renderer interface
@@ -65,11 +58,17 @@ public:
     virtual Camera& getCamera() = 0;
     virtual const Camera& getCamera() const = 0;
 
+    // ===== Frame Tracking =====
+
+    // Get the current frame index (increments after each present())
+    virtual uint64_t getCurrentFrameIndex() const = 0;
+
     // ===== Rendering =====
 
-    // Render the scene
-    // Returns the bounding box of all rendered objects
-    virtual box3 render() = 0;
+    // Render the scene, optionally measuring with provided query.
+    // Query will have its internal begin/end called automatically.
+    // Returns the bounding box of all rendered objects.
+    virtual box3 render(IQuery* query = nullptr) = 0;
 
     // Present the rendered frame to the window
     virtual void present() = 0;
@@ -83,10 +82,12 @@ public:
     virtual const RendererConfig& getConfig() const = 0;
     virtual void setConfig(const RendererConfig& config) = 0;
 
-    // ===== Statistics =====
+    // ===== Query Factory Methods =====
 
-    // Get statistics from the last rendered frame
-    virtual RenderStats getLastFrameStats() const = 0;
+    // Create a query for GPU measurements
+    // capabilities: what data to capture (Timestamps, PipelineStats, or both)
+    // slotCount: number of concurrent measurements supported (ring buffer size)
+    virtual std::shared_ptr<IQuery> createQuery(QueryCapability capabilities, uint32_t slotCount = 128) = 0;
 
     // ===== Window Access =====
 

@@ -7,6 +7,7 @@
 #include "utils/visLib/d3d12/D3D12Mesh.h"
 #include "utils/visLib/d3d12/D3D12Font.h"
 #include "utils/visLib/d3d12/D3D12Text.h"
+#include "utils/visLib/d3d12/D3D12Query.h"
 #include "utils/visLib/d3d12/internal/DirectXHelpers.h"
 #include "utils/visLib/d3d12/internal/CD3DX12.h"
 #include "utils/visLib/d3d12/internal/D3D12ShaderHelper.h"
@@ -306,6 +307,14 @@ void OpenXRRenderer::setConfig(const RendererConfig& config)
     m_config = config;
 }
 
+std::shared_ptr<IQuery> OpenXRRenderer::createQuery(QueryCapability capabilities, uint32_t slotCount)
+{
+    auto pDevice = m_pWindow->getDevice();
+    auto pQueue = m_pWindow->getCommandQueue();
+    if (!pDevice || !pQueue) return nullptr;
+    return std::make_shared<D3D12Query>(pDevice, pQueue, capabilities, slotCount);
+}
+
 DirectX::XMMATRIX OpenXRRenderer::xrPoseToViewMatrix(const XrPosef& pose)
 {
     // Convert XR quaternion to rotation matrix
@@ -346,8 +355,12 @@ DirectX::XMMATRIX OpenXRRenderer::xrFovToProjectionMatrix(const XrFovf& fov, flo
     return proj;
 }
 
-box3 OpenXRRenderer::render()
+box3 OpenXRRenderer::render(IQuery* query)
 {
+    // Note: Queries in VR mode are not fully supported yet.
+    // The VR renderer renders each eye separately, making query timing more complex.
+    (void)query;
+
     if (!m_session || !m_session->isSessionRunning()) {
         return box3();
     }
@@ -362,8 +375,6 @@ box3 OpenXRRenderer::render()
     box3 sceneBoundingBox;
     sceneBoundingBox.m_mins = float3(FLT_MAX, FLT_MAX, FLT_MAX);
     sceneBoundingBox.m_maxs = float3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
-
-    m_lastStats = {};
 
     auto pDevice = m_pWindow->getDevice();
 
@@ -481,7 +492,6 @@ void OpenXRRenderer::renderEye(int eye, const DirectX::XMMATRIX& viewMatrix,
         auto node = pObject->updateMeshNode();
         if (!node.isEmpty()) {
             renderMeshNode(node, affine3::identity(), m_pCommandList.Get(), sceneBoundingBox, hasValidBounds);
-            m_lastStats.objectsRendered++;
         }
         ++it;
     }
@@ -559,9 +569,6 @@ void OpenXRRenderer::renderMeshNode(const MeshNode& node, const affine3& parentT
 
         pCmdList->DrawIndexedInstanced(pD3D12Mesh->getIndexCount(), 1, 0, 0, 0);
 
-        m_lastStats.drawCalls++;
-        m_lastStats.trianglesRendered += pD3D12Mesh->getTriangleCount();
-
         // Accumulate bounds
         const box3& localBounds = pD3D12Mesh->getBoundingBox();
         if (!localBounds.isempty()) {
@@ -587,6 +594,7 @@ void OpenXRRenderer::present()
         m_session->endFrame();
         m_frameStarted = false;
     }
+    m_frameIndex++;
 }
 
 void OpenXRRenderer::waitForGPU()

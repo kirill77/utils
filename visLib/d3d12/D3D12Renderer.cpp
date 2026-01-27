@@ -2,6 +2,7 @@
 
 #include "utils/visLib/d3d12/internal/D3D12Common.h"
 #include "D3D12Renderer.h"
+#include "D3D12Query.h"
 #include "utils/visLib/include/IVisObject.h"
 #include "utils/visLib/d3d12/internal/DirectXHelpers.h"
 #include "utils/visLib/d3d12/internal/CD3DX12.h"
@@ -239,11 +240,29 @@ void D3D12Renderer::initializeRenderResources()
     ThrowIfFailed(m_pTransformBuffer->Map(0, &readRange, reinterpret_cast<void**>(&m_pMappedTransformBuffer)));
 }
 
-box3 D3D12Renderer::render()
+std::shared_ptr<IQuery> D3D12Renderer::createQuery(QueryCapability capabilities, uint32_t slotCount)
+{
+    auto pSwapChain = m_pWindow->getSwapChain();
+    auto pQueue = pSwapChain->getQueue();
+    return std::make_shared<D3D12Query>(m_pWindow->getDevice(), pQueue->getQueue(), capabilities, slotCount);
+}
+
+box3 D3D12Renderer::render(IQuery* query)
 {
     auto pSwapChain = m_pWindow->getSwapChain();
     auto pQueue = pSwapChain->getQueue();
     auto pCmdList = pQueue->beginRecording();
+
+    // Begin query if provided
+    D3D12Query* pD3D12Query = nullptr;
+    if (query)
+    {
+        pD3D12Query = dynamic_cast<D3D12Query*>(query);
+        if (pD3D12Query)
+        {
+            pD3D12Query->beginInternal(pCmdList.Get(), m_frameIndex);
+        }
+    }
 
     // Get dimensions
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
@@ -326,8 +345,6 @@ box3 D3D12Renderer::render()
     sceneBoundingBox.m_maxs = float3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
     bool hasValidBounds = false;
 
-    m_lastStats = {};
-
     for (auto it = m_objects.begin(); it != m_objects.end(); )
     {
         auto pObject = it->lock();
@@ -341,7 +358,6 @@ box3 D3D12Renderer::render()
         if (!node.isEmpty())
         {
             renderMeshNode(node, affine3::identity(), pCmdList.Get(), sceneBoundingBox, hasValidBounds);
-            m_lastStats.objectsRendered++;
         }
 
         ++it;
@@ -364,6 +380,12 @@ box3 D3D12Renderer::render()
     barrier = CD3DX12_RESOURCE_BARRIER::Transition(
         backBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
     pCmdList->ResourceBarrier(1, &barrier);
+
+    // End query (before execute)
+    if (pD3D12Query)
+    {
+        pD3D12Query->endInternal(pCmdList.Get());
+    }
 
     // Execute
     pQueue->execute(pCmdList);
@@ -413,9 +435,6 @@ void D3D12Renderer::renderMeshNode(const MeshNode& node, const affine3& parentTr
 
         pCmdList->DrawIndexedInstanced(pD3D12Mesh->getIndexCount(), 1, 0, 0, 0);
 
-        m_lastStats.drawCalls++;
-        m_lastStats.trianglesRendered += pD3D12Mesh->getTriangleCount();
-
         // Accumulate bounds
         const box3& localBounds = pD3D12Mesh->getBoundingBox();
         if (!localBounds.isempty())
@@ -444,6 +463,7 @@ void D3D12Renderer::present()
 {
     auto pSwapChain = m_pWindow->getSwapChain();
     ThrowIfFailed(pSwapChain->getSwapChain()->Present(1, 0));
+    m_frameIndex++;
 }
 
 void D3D12Renderer::waitForGPU()
