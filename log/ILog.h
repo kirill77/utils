@@ -1,6 +1,7 @@
 #pragma once
 
 #include <windows.h>
+#include <cstdint>
 #include <ctime>
 #include <string>
 #include <memory>
@@ -44,3 +45,17 @@ struct ILog
 #define LOG_INFO(fmt,...) ILog::getInterface()->logva(LogLevel::eInfo, __FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__)
 #define LOG_WARN(fmt,...) ILog::getInterface()->logva(LogLevel::eWarning, __FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__)
 #define LOG_ERROR(fmt,...) ILog::getInterface()->logva(LogLevel::eError, __FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__)
+
+// Throttled logging - logs at powers of two (1, 2, 4, 8, 16, 32...)
+// Prints warning index (which logged occurrence) and total count (including skipped)
+// Uses static variables per call site to track count and logged index
+#define LOG_WARN_THROTTLED(fmt, ...) \
+    do { \
+        static uint64_t s_totalCount = 0; \
+        static uint64_t s_loggedIndex = 0; \
+        ++s_totalCount; \
+        if ((s_totalCount & (s_totalCount - 1)) == 0) { \
+            ++s_loggedIndex; \
+            LOG_WARN("[%llu/%llu] " fmt, s_loggedIndex, s_totalCount, ##__VA_ARGS__); \
+        } \
+    } while(0)
