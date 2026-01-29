@@ -159,10 +159,13 @@ Key Win32InputState::vkToKey(WPARAM vkCode)
         case VK_PRIOR:      return Key::PageUp;
         case VK_NEXT:       return Key::PageDown;
         
+        case VK_SHIFT:      return Key::LeftShift;   // Generic Shift
         case VK_LSHIFT:     return Key::LeftShift;
         case VK_RSHIFT:     return Key::RightShift;
+        case VK_CONTROL:    return Key::LeftCtrl;    // Generic Ctrl
         case VK_LCONTROL:   return Key::LeftCtrl;
         case VK_RCONTROL:   return Key::RightCtrl;
+        case VK_MENU:       return Key::LeftAlt;     // Generic Alt
         case VK_LMENU:      return Key::LeftAlt;
         case VK_RMENU:      return Key::RightAlt;
         
