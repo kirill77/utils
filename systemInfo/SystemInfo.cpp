@@ -6,6 +6,7 @@
 #include <sstream>
 #include <fstream>
 #include <algorithm>
+#include <unordered_map>
 #include <locale>
 #include <codecvt>
 
@@ -120,12 +121,13 @@ std::string trim(const std::string& str) {
 namespace {
 
 std::vector<GpuInfo> collectGpuInfo() {
-    std::vector<GpuInfo> gpus;
+    // Use map to deduplicate by VendorId + DeviceId (DXGI can report same GPU multiple times)
+    std::unordered_map<uint64_t, GpuInfo> gpuMap;
 
     ComPtr<IDXGIFactory> pFactory;
     HRESULT hr = CreateDXGIFactory(__uuidof(IDXGIFactory), &pFactory);
     if (FAILED(hr) || !pFactory) {
-        return gpus;
+        return {};
     }
 
     ComPtr<IDXGIAdapter> pAdapter;
@@ -134,6 +136,11 @@ std::vector<GpuInfo> collectGpuInfo() {
         if (SUCCEEDED(pAdapter->GetDesc(&desc))) {
             // Skip software adapters
             if (desc.VendorId != 0x1414 || desc.DeviceId != 0x8c) {
+                uint64_t key = (static_cast<uint64_t>(desc.VendorId) << 32) | desc.DeviceId;
+                if (gpuMap.find(key) != gpuMap.end()) {
+                    continue;  // Already have this GPU
+                }
+
                 GpuInfo gpu;
                 gpu.name = desc.Description;
                 gpu.dedicatedVideoMemoryMB = desc.DedicatedVideoMemory / (1024 * 1024);
@@ -154,11 +161,17 @@ std::vector<GpuInfo> collectGpuInfo() {
                     gpu.driverVersion = versionStr;
                 }
 
-                gpus.push_back(gpu);
+                gpuMap[key] = gpu;
             }
         }
     }
 
+    // Convert map to vector
+    std::vector<GpuInfo> gpus;
+    gpus.reserve(gpuMap.size());
+    for (auto& [key, gpu] : gpuMap) {
+        gpus.push_back(std::move(gpu));
+    }
     return gpus;
 }
 
