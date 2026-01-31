@@ -15,7 +15,8 @@ D3D12Window::D3D12Window(const WindowConfig& config)
     winConfig.width = config.width;
     winConfig.height = config.height;
     winConfig.resizable = config.resizable;
-    winConfig.fullscreen = config.fullscreen;
+    winConfig.fullDesktop = config.fullDesktop;
+    winConfig.exclusiveFullscreen = config.exclusiveFullscreen;
 
     m_window = std::make_unique<Win32InputWindow>(winConfig);
     if (!m_window->isValid()) {

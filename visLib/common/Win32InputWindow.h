@@ -17,7 +17,8 @@ struct Win32WindowConfig {
     uint32_t width = 1280;
     uint32_t height = 720;
     bool resizable = true;
-    bool fullscreen = false;
+    bool fullDesktop = false;         // Borderless fullscreen at desktop resolution (-fullDesktop)
+    bool exclusiveFullscreen = false; // Exclusive fullscreen (changes display resolution)
 };
 
 // Win32InputWindow: Creates a Win32 window and handles input via messages
@@ -79,6 +80,9 @@ private:
 
     // Display text (for windows without D3D12 rendering)
     std::string m_displayText;
+
+    // Exclusive fullscreen state
+    bool m_displayModeChanged = false;  // True if we changed display resolution
 };
 
 } // namespace visLib

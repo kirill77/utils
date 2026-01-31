@@ -19,6 +19,12 @@ Win32InputWindow::~Win32InputWindow()
         DestroyWindow(m_hwnd);
         m_hwnd = nullptr;
     }
+    
+    // Restore original display settings if we changed them
+    if (m_displayModeChanged) {
+        ChangeDisplaySettings(nullptr, 0);
+        m_displayModeChanged = false;
+    }
 }
 
 bool Win32InputWindow::createWindow(const Win32WindowConfig& config)
@@ -36,11 +42,32 @@ bool Win32InputWindow::createWindow(const Win32WindowConfig& config)
         }
     }
 
-    // Determine window size
-    if (config.fullscreen) {
+    // Handle exclusive fullscreen: change display resolution
+    if (config.exclusiveFullscreen) {
+        DEVMODE devMode = {};
+        devMode.dmSize = sizeof(DEVMODE);
+        devMode.dmPelsWidth = config.width;
+        devMode.dmPelsHeight = config.height;
+        devMode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT;
+        
+        LONG result = ChangeDisplaySettings(&devMode, CDS_FULLSCREEN);
+        if (result == DISP_CHANGE_SUCCESSFUL) {
+            m_displayModeChanged = true;
+            m_width = config.width;
+            m_height = config.height;
+        } else {
+            // Failed to change display mode, fall back to windowed
+            m_width = config.width;
+            m_height = config.height;
+        }
+    }
+    // Handle borderless fullscreen: use desktop resolution
+    else if (config.fullDesktop) {
         m_width = GetSystemMetrics(SM_CXSCREEN);
         m_height = GetSystemMetrics(SM_CYSCREEN);
-    } else {
+    }
+    // Normal windowed mode
+    else {
         m_width = config.width;
         m_height = config.height;
     }
@@ -57,8 +84,10 @@ bool Win32InputWindow::createWindow(const Win32WindowConfig& config)
     RegisterClassEx(&windowClass);
 
     // Determine window style
-    DWORD windowStyle = config.fullscreen ? WS_POPUP : WS_OVERLAPPEDWINDOW;
-    if (!config.resizable && !config.fullscreen) {
+    // Exclusive fullscreen and borderless fullscreen both use WS_POPUP
+    bool isBorderless = config.fullDesktop || config.exclusiveFullscreen;
+    DWORD windowStyle = isBorderless ? WS_POPUP : WS_OVERLAPPEDWINDOW;
+    if (!config.resizable && !isBorderless) {
         windowStyle &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
     }
 
@@ -69,13 +98,17 @@ bool Win32InputWindow::createWindow(const Win32WindowConfig& config)
     // Convert title to wide string
     std::wstring wideTitle(config.title.begin(), config.title.end());
 
+    // Window position: top-left for fullscreen modes, default for windowed
+    int xPos = isBorderless ? 0 : CW_USEDEFAULT;
+    int yPos = isBorderless ? 0 : CW_USEDEFAULT;
+
     // Create window
     m_hwnd = CreateWindow(
         windowClass.lpszClassName,
         wideTitle.c_str(),
         windowStyle,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
+        xPos,
+        yPos,
         windowRect.right - windowRect.left,
         windowRect.bottom - windowRect.top,
         nullptr,
@@ -84,6 +117,11 @@ bool Win32InputWindow::createWindow(const Win32WindowConfig& config)
         this);
 
     if (!m_hwnd) {
+        // Restore display settings if we changed them
+        if (m_displayModeChanged) {
+            ChangeDisplaySettings(nullptr, 0);
+            m_displayModeChanged = false;
+        }
         return false;
     }
 

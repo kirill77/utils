@@ -14,7 +14,8 @@ struct WindowConfig {
     std::string title = "visLib Window";
     uint32_t width = 2560;
     uint32_t height = 1440;
-    bool fullscreen = true;
+    bool fullDesktop = false;         // Borderless fullscreen at desktop resolution (-fullDesktop)
+    bool exclusiveFullscreen = false; // Exclusive fullscreen (changes display resolution)
     bool resizable = true;
     bool vsync = true;
 

@@ -20,7 +20,7 @@ OpenXRWindow::OpenXRWindow(const WindowConfig& config)
     winConfig.width = config.width;
     winConfig.height = config.height;
     winConfig.resizable = config.resizable;
-    winConfig.fullscreen = config.fullscreen;
+    winConfig.fullDesktop = config.fullDesktop;
 
     m_companionWindow = std::make_unique<Win32InputWindow>(winConfig);
     if (!m_companionWindow->isValid()) {
