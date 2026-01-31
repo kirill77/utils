@@ -289,6 +289,11 @@ ILog* ILog::getInterface(const char *sName)
             return it->second;
         ILog *pLog = new MyLog(nullptr, sName);
         m_pLogs[sName] = pLog;
+        // Also set as default interface so getInterface() without name returns this log
+        if (!g_pInterface)
+        {
+            g_pInterface = pLog;
+        }
         return pLog;
     }
     if (g_pInterface == nullptr)
@@ -314,6 +319,11 @@ ILog* ILog::create(const std::string &sPath, const char *sName)
         // Create new log instance using the unified constructor
         ILog* pLog = new MyLog(sPath.c_str(), sName);
         m_pLogs[sName] = pLog;
+        // Also set as default interface so getInterface() without name returns this log
+        if (!g_pInterface)
+        {
+            g_pInterface = pLog;
+        }
         return pLog;
     }
     if (g_pInterface)
@@ -321,6 +331,6 @@ ILog* ILog::create(const std::string &sPath, const char *sName)
         assert(false); // why there are two calls to ILog::create()
         return g_pInterface;
     }
-    g_pInterface = new MyLog(sPath.c_str(), sName);
+    g_pInterface = new MyLog(sPath.c_str(), nullptr);
     return g_pInterface;
 }
