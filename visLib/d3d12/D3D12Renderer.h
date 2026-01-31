@@ -65,6 +65,11 @@ private:
         DirectX::XMMATRIX Projection;
     };
 
+    struct PixelParamsBuffer {
+        uint32_t IterationCount;
+        uint32_t _padding[3];  // Align to 16 bytes
+    };
+
     D3D12Window* m_pWindow;
     RendererConfig m_config;
     Camera m_camera;
@@ -77,6 +82,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> m_pRootSignature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pPipelineState;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_pTransformBuffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_pPixelParamsBuffer;  // For Heavy pixel shader
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_pCBVHeap;
     
     TransformBuffer m_transformData;

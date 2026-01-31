@@ -135,10 +135,13 @@ void D3D12Renderer::initializeRenderResources()
     Microsoft::WRL::ComPtr<ID3DBlob> vertexShader;
     Microsoft::WRL::ComPtr<ID3DBlob> pixelShader;
 
+    // Convert pixel shader name to wide string
+    std::wstring pixelShaderName(m_config.pixelShader.begin(), m_config.pixelShader.end());
+
     // Try precompiled shaders
     std::wstring shaderPath = L"Shaders/";
     vertexShader = shaderHelper.loadCompiledShader(shaderPath + L"VertexShader.cso");
-    pixelShader = shaderHelper.loadCompiledShader(shaderPath + L"PixelShader.cso");
+    pixelShader = shaderHelper.loadCompiledShader(shaderPath + pixelShaderName + L".cso");
 
     // Fallback: compile at runtime
     if (!vertexShader || !pixelShader)
@@ -147,7 +150,7 @@ void D3D12Renderer::initializeRenderResources()
         if (!vertexShader)
             vertexShader = shaderHelper.loadShader(shaderPath + L"VertexShader.hlsl", "main", "vs_5_0", compileFlags);
         if (!pixelShader)
-            pixelShader = shaderHelper.loadShader(shaderPath + L"PixelShader.hlsl", "main", "ps_5_0", compileFlags);
+            pixelShader = shaderHelper.loadShader(shaderPath + pixelShaderName + L".hlsl", "main", "ps_5_0", compileFlags);
     }
 
     // Vertex input layout
@@ -216,26 +219,51 @@ void D3D12Renderer::initializeRenderResources()
 
     ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pPipelineState)));
 
-    // Create transform constant buffer
-    const UINT constantBufferSize = (sizeof(TransformBuffer) + 255) & ~255;
-    m_pTransformBuffer = CreateBuffer(pDevice, constantBufferSize,
+    // Create transform constant buffer (b0)
+    const UINT transformBufferSize = (sizeof(TransformBuffer) + 255) & ~255;
+    m_pTransformBuffer = CreateBuffer(pDevice, transformBufferSize,
                                       D3D12_RESOURCE_FLAG_NONE,
                                       D3D12_RESOURCE_STATE_GENERIC_READ);
 
-    // Create CBV heap
+    // Create pixel params constant buffer (b1) - available for any shader that needs it
+    const UINT pixelParamsBufferSize = (sizeof(PixelParamsBuffer) + 255) & ~255;
+    m_pPixelParamsBuffer = CreateBuffer(pDevice, pixelParamsBufferSize,
+                                        D3D12_RESOURCE_FLAG_NONE,
+                                        D3D12_RESOURCE_STATE_GENERIC_READ);
+
+    // Initialize pixel params with iteration count
+    PixelParamsBuffer pixelParams = {};
+    pixelParams.IterationCount = m_config.pixelShaderIterations;
+    
+    uint8_t* pMappedPixelParams = nullptr;
+    CD3DX12_RANGE readRangePixel(0, 0);
+    ThrowIfFailed(m_pPixelParamsBuffer->Map(0, &readRangePixel, reinterpret_cast<void**>(&pMappedPixelParams)));
+    memcpy(pMappedPixelParams, &pixelParams, sizeof(PixelParamsBuffer));
+    m_pPixelParamsBuffer->Unmap(0, nullptr);
+
+    // Create CBV heap (2 descriptors: transform buffer b0, pixel params b1)
     D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc = {};
-    cbvHeapDesc.NumDescriptors = 1;
+    cbvHeapDesc.NumDescriptors = 2;
     cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     ThrowIfFailed(pDevice->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_pCBVHeap)));
 
-    // Create CBV
+    UINT cbvDescriptorSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE cbvHandle(m_pCBVHeap->GetCPUDescriptorHandleForHeapStart());
+
+    // Create CBV for transform buffer (b0)
     D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
     cbvDesc.BufferLocation = m_pTransformBuffer->GetGPUVirtualAddress();
-    cbvDesc.SizeInBytes = constantBufferSize;
-    pDevice->CreateConstantBufferView(&cbvDesc, m_pCBVHeap->GetCPUDescriptorHandleForHeapStart());
+    cbvDesc.SizeInBytes = transformBufferSize;
+    pDevice->CreateConstantBufferView(&cbvDesc, cbvHandle);
 
-    // Map buffer
+    // Create CBV for pixel params buffer (b1)
+    cbvHandle.Offset(1, cbvDescriptorSize);
+    cbvDesc.BufferLocation = m_pPixelParamsBuffer->GetGPUVirtualAddress();
+    cbvDesc.SizeInBytes = pixelParamsBufferSize;
+    pDevice->CreateConstantBufferView(&cbvDesc, cbvHandle);
+
+    // Map transform buffer
     CD3DX12_RANGE readRange(0, 0);
     ThrowIfFailed(m_pTransformBuffer->Map(0, &readRange, reinterpret_cast<void**>(&m_pMappedTransformBuffer)));
 }
