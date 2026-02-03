@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <optional>
 
 /**
  * @struct GpuInfo
@@ -81,3 +82,40 @@ struct SystemInfo {
  * @return SystemInfo structure populated with GPU, CPU, and monitor information
  */
 SystemInfo collectSystemInfo();
+
+/**
+ * @struct InstalledAppInfo
+ * @brief Information about an installed application found in the registry
+ */
+struct InstalledAppInfo {
+    std::wstring displayName;       ///< Application display name
+    std::wstring installLocation;   ///< Installation directory path
+    std::wstring version;           ///< Application version string
+};
+
+/**
+ * @class InstalledAppRegistry
+ * @brief Queries Windows registry for installed application information
+ * 
+ * Searches both 64-bit and 32-bit (WOW6432Node) registry locations under
+ * HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall
+ */
+class InstalledAppRegistry {
+public:
+    InstalledAppRegistry() = default;
+    
+    /**
+     * @brief Find an installed application by searching the Windows registry
+     * @param searchName Substring to search for in application display names (case-sensitive)
+     * @return Application info if found, std::nullopt otherwise
+     */
+    std::optional<InstalledAppInfo> find(const std::wstring& searchName) const;
+    
+    /**
+     * @brief Find FrameView installation
+     * @return Application info if found, std::nullopt otherwise
+     */
+    std::optional<InstalledAppInfo> findFrameView() const {
+        return find(L"FrameView");
+    }
+};

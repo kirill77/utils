@@ -441,3 +441,84 @@ SystemInfo SystemInfo::loadFromFile(const std::string& filename) {
     oss << file.rdbuf();
     return fromCSV(oss.str());
 }
+
+// ============================================================================
+// Installed Application Detection
+// ============================================================================
+
+std::optional<InstalledAppInfo> InstalledAppRegistry::find(const std::wstring& searchName) const {
+    if (searchName.empty()) {
+        return std::nullopt;
+    }
+
+    // Registry locations to search for installed applications
+    const wchar_t* uninstallKeys[] = {
+        L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+        L"SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall"
+    };
+
+    for (const auto* keyPath : uninstallKeys) {
+        HKEY hUninstallKey;
+        if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, keyPath, 0, KEY_READ, &hUninstallKey) != ERROR_SUCCESS) {
+            continue;
+        }
+
+        DWORD subKeyCount = 0;
+        RegQueryInfoKeyW(hUninstallKey, nullptr, nullptr, nullptr, &subKeyCount,
+                        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+
+        for (DWORD i = 0; i < subKeyCount; ++i) {
+            wchar_t subKeyName[256];
+            DWORD subKeyNameLen = 256;
+
+            if (RegEnumKeyExW(hUninstallKey, i, subKeyName, &subKeyNameLen,
+                             nullptr, nullptr, nullptr, nullptr) != ERROR_SUCCESS) {
+                continue;
+            }
+
+            HKEY hAppKey;
+            if (RegOpenKeyExW(hUninstallKey, subKeyName, 0, KEY_READ, &hAppKey) != ERROR_SUCCESS) {
+                continue;
+            }
+
+            // Check DisplayName for search term
+            wchar_t displayName[512] = {0};
+            DWORD displayNameSize = sizeof(displayName);
+            if (RegQueryValueExW(hAppKey, L"DisplayName", nullptr, nullptr,
+                                reinterpret_cast<LPBYTE>(displayName), &displayNameSize) == ERROR_SUCCESS) {
+
+                std::wstring name(displayName);
+                // Check if display name contains the search term
+                if (name.find(searchName) != std::wstring::npos) {
+
+                    // Get InstallLocation
+                    wchar_t installPath[MAX_PATH] = {0};
+                    DWORD installPathSize = sizeof(installPath);
+                    if (RegQueryValueExW(hAppKey, L"InstallLocation", nullptr, nullptr,
+                                        reinterpret_cast<LPBYTE>(installPath), &installPathSize) == ERROR_SUCCESS) {
+
+                        InstalledAppInfo info;
+                        info.displayName = name;
+                        info.installLocation = installPath;
+
+                        // Try to get version
+                        wchar_t version[128] = {0};
+                        DWORD versionSize = sizeof(version);
+                        if (RegQueryValueExW(hAppKey, L"DisplayVersion", nullptr, nullptr,
+                                            reinterpret_cast<LPBYTE>(version), &versionSize) == ERROR_SUCCESS) {
+                            info.version = version;
+                        }
+
+                        RegCloseKey(hAppKey);
+                        RegCloseKey(hUninstallKey);
+                        return info;
+                    }
+                }
+            }
+            RegCloseKey(hAppKey);
+        }
+        RegCloseKey(hUninstallKey);
+    }
+
+    return std::nullopt;
+}
