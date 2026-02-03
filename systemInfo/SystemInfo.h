@@ -110,12 +110,4 @@ public:
      * @return Application info if found, std::nullopt otherwise
      */
     std::optional<InstalledAppInfo> find(const std::wstring& searchName) const;
-    
-    /**
-     * @brief Find FrameView installation
-     * @return Application info if found, std::nullopt otherwise
-     */
-    std::optional<InstalledAppInfo> findFrameView() const {
-        return find(L"FrameView");
-    }
 };
