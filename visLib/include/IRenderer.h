@@ -63,6 +63,9 @@ public:
     // Get the scene camera (mutable reference for direct manipulation)
     virtual Camera& getCamera() = 0;
     virtual const Camera& getCamera() const = 0;
+    
+    // Get shared pointer to camera (for shared ownership)
+    virtual std::shared_ptr<Camera> getCameraPtr() = 0;
 
     // ===== Frame Tracking =====
 
