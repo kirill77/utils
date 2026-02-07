@@ -24,6 +24,7 @@ OpenXRRenderer::OpenXRRenderer(OpenXRWindow* pWindow, const RendererConfig& conf
 {
     // Camera uses defaults from Camera constructor
     // All camera modifications happen in shared application code
+    m_pCamera = std::make_shared<Camera>();
     initializeRenderResources();
 }
 
@@ -397,7 +398,7 @@ box3 OpenXRRenderer::render(IQuery* query)
         DirectX::XMMATRIX projMatrix = xrFovToProjectionMatrix(view.fov, 0.01f, 1000.0f);
 
         // Adjust camera to match the position/rotation seen in the desktop view
-        float3 camPos = m_camera.getPosition();
+        float3 camPos = m_pCamera->getPosition();
         DirectX::XMMATRIX worldOffset = DirectX::XMMatrixIdentity();
         worldOffset = DirectX::XMMatrixMultiply(DirectX::XMMatrixRotationY(DirectX::XM_PI), worldOffset);
         worldOffset = DirectX::XMMatrixMultiply(DirectX::XMMatrixRotationZ(-DirectX::XM_PIDIV2), worldOffset);

@@ -17,6 +17,7 @@ D3D12Renderer::D3D12Renderer(D3D12Window* pWindow, const RendererConfig& config)
 {
     // Camera uses defaults from Camera constructor
     // All camera modifications happen in shared application code
+    m_pCamera = std::make_shared<Camera>();
     initializeRenderResources();
 }
 
@@ -337,11 +338,11 @@ box3 D3D12Renderer::render(IQuery* query)
     // Update transform buffer
     if (m_pMappedTransformBuffer)
     {
-        m_camera.setAspectRatio(static_cast<float>(width) / static_cast<float>(height));
+        m_pCamera->setAspectRatio(static_cast<float>(width) / static_cast<float>(height));
         
         // Convert visLib::float4x4 to DirectX::XMMATRIX
-        auto viewMat = m_camera.getViewMatrix();
-        auto projMat = m_camera.getProjectionMatrix();
+        auto viewMat = m_pCamera->getViewMatrix();
+        auto projMat = m_pCamera->getProjectionMatrix();
         
         m_transformData.View = DirectX::XMMATRIX(
             viewMat.row0.x, viewMat.row0.y, viewMat.row0.z, viewMat.row0.w,
