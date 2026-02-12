@@ -118,6 +118,15 @@ bool D3D12Window::initDirectX()
         ThrowIfFailed(D3D12CreateDevice(hardwareAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device)));
     }
 
+#ifdef _DEBUG
+    // Break into debugger on D3D12 validation errors
+    Microsoft::WRL::ComPtr<ID3D12InfoQueue> infoQueue;
+    if (SUCCEEDED(m_device.As(&infoQueue))) {
+        infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+        infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+    }
+#endif
+
     // Create D3D12SwapChain
     m_pSwapChain = std::make_shared<D3D12SwapChain>(m_device.Get(), m_window->getHandle());
 

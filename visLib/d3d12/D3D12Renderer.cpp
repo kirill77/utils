@@ -7,6 +7,7 @@
 #include "utils/visLib/d3d12/internal/DirectXHelpers.h"
 #include "utils/visLib/d3d12/internal/CD3DX12.h"
 #include "utils/visLib/d3d12/internal/D3D12ShaderHelper.h"
+#include "utils/visLib/d3d12/internal/D3D12RenderTarget.h"
 #include <DirectXMath.h>
 
 namespace visLib {
@@ -392,6 +393,13 @@ box3 D3D12Renderer::render(IQuery* query)
     }
 
     // Render text objects on top
+    // Build target without pResource — renderer already manages barriers
+    D3D12RenderTarget textTarget;
+    textTarget.width = width;
+    textTarget.height = height;
+    textTarget.rtvHandle = rtvHandle;
+    textTarget.dsvHandle = dsvHandle;
+
     for (auto it = m_textObjects.begin(); it != m_textObjects.end(); )
     {
         auto pText = it->lock();
@@ -400,7 +408,7 @@ box3 D3D12Renderer::render(IQuery* query)
             it = m_textObjects.erase(it);
             continue;
         }
-        pText->render(pSwapChain, m_pRootSignature.Get(), pCmdList.Get());
+        pText->render(textTarget, m_pRootSignature.Get(), pCmdList.Get());
         ++it;
     }
 
