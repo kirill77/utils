@@ -46,8 +46,9 @@ public:
     void clearObjects() override;
 
     // Camera (note: in VR, camera is driven by head tracking)
-    Camera& getCamera() override { return m_camera; }
-    const Camera& getCamera() const override { return m_camera; }
+    Camera& getCamera() override { return *m_pCamera; }
+    const Camera& getCamera() const override { return *m_pCamera; }
+    std::shared_ptr<Camera> getCameraPtr() override { return m_pCamera; }
 
     // Frame tracking
     uint64_t getCurrentFrameIndex() const override { return m_frameIndex; }
@@ -87,7 +88,7 @@ private:
     OpenXRWindow* m_pWindow;
     OpenXRSession* m_session;
     RendererConfig m_config;
-    Camera m_camera;
+    std::shared_ptr<Camera> m_pCamera;
     uint64_t m_frameIndex = 0;
 
     std::vector<std::weak_ptr<IVisObject>> m_objects;

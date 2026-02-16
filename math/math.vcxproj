@@ -150,7 +150,6 @@
     <ClInclude Include="vector.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="math.cpp" />
     <ClCompile Include="SampleStats.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
