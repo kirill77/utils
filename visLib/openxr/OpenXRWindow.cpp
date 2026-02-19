@@ -157,6 +157,12 @@ uint32_t OpenXRWindow::getHeight() const
     return 1080;  // Fallback
 }
 
+void OpenXRWindow::resize(uint32_t width, uint32_t height)
+{
+    // VR render resolution is fixed by the headset; resize the companion window only
+    m_companionWindow->resize(width, height);
+}
+
 void OpenXRWindow::processEvents()
 {
     // Process companion window messages (keyboard, mouse input)

@@ -39,6 +39,10 @@ public:
     virtual uint32_t getWidth() const = 0;
     virtual uint32_t getHeight() const = 0;
 
+    // Resize the window client area to the given dimensions.
+    // Triggers swap chain / back buffer resize internally.
+    virtual void resize(uint32_t width, uint32_t height) = 0;
+
     // Aspect ratio (width / height)
     float getAspectRatio() const {
         uint32_t h = getHeight();

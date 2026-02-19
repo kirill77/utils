@@ -22,6 +22,7 @@ public:
     void close() override;
     uint32_t getWidth() const override;
     uint32_t getHeight() const override;
+    void resize(uint32_t width, uint32_t height) override;
     void processEvents() override;
     const InputState& getInputState() const override;
     void* getNativeHandle() const override;

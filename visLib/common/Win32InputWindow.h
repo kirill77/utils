@@ -52,6 +52,10 @@ public:
     uint32_t getWidth() const { return m_width; }
     uint32_t getHeight() const { return m_height; }
 
+    // Programmatically resize the window client area.
+    // Triggers WM_SIZE which fires the resize callback.
+    void resize(uint32_t width, uint32_t height);
+
     // Display text (drawn via GDI when no D3D12 rendering)
     void setDisplayText(const std::string& text);
 

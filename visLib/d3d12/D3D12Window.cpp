@@ -61,6 +61,11 @@ uint32_t D3D12Window::getHeight() const
     return m_window->getHeight();
 }
 
+void D3D12Window::resize(uint32_t width, uint32_t height)
+{
+    m_window->resize(width, height);
+}
+
 void D3D12Window::processEvents()
 {
     m_window->processMessages();

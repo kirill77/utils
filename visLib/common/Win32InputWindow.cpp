@@ -157,6 +157,21 @@ void Win32InputWindow::setDisplayText(const std::string& text)
     }
 }
 
+void Win32InputWindow::resize(uint32_t width, uint32_t height)
+{
+    if (!m_hwnd || width == 0 || height == 0) {
+        return;
+    }
+
+    DWORD style = static_cast<DWORD>(GetWindowLong(m_hwnd, GWL_STYLE));
+    RECT rect = { 0, 0, static_cast<LONG>(width), static_cast<LONG>(height) };
+    AdjustWindowRect(&rect, style, FALSE);
+
+    SetWindowPos(m_hwnd, nullptr, 0, 0,
+                 rect.right - rect.left, rect.bottom - rect.top,
+                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
 void Win32InputWindow::onResize(uint32_t width, uint32_t height)
 {
     if (width == 0 || height == 0) {
