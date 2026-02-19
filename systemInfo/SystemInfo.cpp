@@ -5,6 +5,7 @@
 #include <wrl/client.h>
 #include <sstream>
 #include <fstream>
+#include <iomanip>
 #include <algorithm>
 #include <unordered_map>
 #include <locale>
@@ -300,6 +301,30 @@ SystemInfo collectSystemInfo() {
     info.cpu = collectCpuInfo();
     info.monitors = collectMonitorInfo();
     return info;
+}
+
+// ============================================================================
+// Hashing
+// ============================================================================
+
+namespace {
+
+uint64_t fnv1a_64(const std::string& str) {
+    uint64_t hash = 0xcbf29ce484222325ULL;  // FNV offset basis
+    for (char c : str) {
+        hash ^= static_cast<uint64_t>(static_cast<unsigned char>(c));
+        hash *= 0x100000001b3ULL;  // FNV prime
+    }
+    return hash;
+}
+
+} // anonymous namespace
+
+std::string SystemInfo::hashHex() const {
+    uint64_t hash = fnv1a_64(toCSV());
+    std::ostringstream oss;
+    oss << std::uppercase << std::hex << std::setfill('0') << std::setw(16) << hash;
+    return oss.str();
 }
 
 // ============================================================================
