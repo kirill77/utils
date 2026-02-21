@@ -3,6 +3,7 @@
 #include "utils/systemInfo/SystemInfo.h"
 #include "utils/log/ILog.h"
 
+#include <Windows.h>
 #include <fstream>
 #include <vector>
 #include <algorithm>
@@ -38,49 +39,46 @@ namespace
     }
 }
 
-FrameViewRunner::FrameViewRunner()
+std::unique_ptr<FrameViewRunner> FrameViewRunner::create(std::string& outError)
 {
     LOG_INFO("FrameViewRunner: Initializing...");
 
-    try {
-        // Step 1: Kill any existing FrameView processes
-        killFrameViewProcesses();
+    std::unique_ptr<FrameViewRunner> runner(new FrameViewRunner());
 
-        // Step 2: Find FrameView installation
-        std::filesystem::path frameViewInstallPath = findFrameViewInstallation();
+    try {
+        runner->killFrameViewProcesses();
+
+        std::filesystem::path frameViewInstallPath = runner->findFrameViewInstallation();
         if (frameViewInstallPath.empty()) {
-            m_error = "FrameView installation not found";
-            LOG_ERROR("FrameViewRunner: %s", m_error.c_str());
-            return;
+            outError = "FrameView installation not found";
+            LOG_ERROR("FrameViewRunner: %s", outError.c_str());
+            return nullptr;
         }
         LOG_INFO("FrameViewRunner: Found FrameView at: %s", frameViewInstallPath.string().c_str());
 
-        // Step 3: Set up paths
         std::filesystem::path tempBase = getTempBasePath();
-        m_frameViewCopyPath = tempBase / "FrameView";
-        m_outputDirectory = tempBase / "Results";
+        runner->m_frameViewCopyPath = tempBase / "FrameView";
+        runner->m_outputDirectory = tempBase / "Results";
 
-        // Step 4: Copy FrameView to isolated location
-        if (!prepareFrameViewCopy(frameViewInstallPath)) {
-            return; // Error already set
+        if (!runner->prepareFrameViewCopy(frameViewInstallPath, outError)) {
+            return nullptr;
         }
 
-        // Step 5: Modify Settings.ini
-        if (!modifyIniFile()) {
-            return; // Error already set
+        if (!runner->modifyIniFile(outError)) {
+            return nullptr;
         }
 
-        // Step 6: Launch FrameView
-        if (!launchFrameView()) {
-            return; // Error already set
+        if (!runner->launchFrameView(outError)) {
+            return nullptr;
         }
 
-        m_valid = true;
         LOG_INFO("FrameViewRunner: Successfully initialized");
+        return runner;
 
     } catch (const std::exception& e) {
-        m_error = std::string("Exception during initialization: ") + e.what();
-        LOG_ERROR("FrameViewRunner: %s", m_error.c_str());
+        outError = std::string("Exception during initialization: ") + e.what();
+        LOG_ERROR("FrameViewRunner: %s", outError.c_str());
+        return nullptr;
     }
 }
 
@@ -103,7 +101,14 @@ std::filesystem::path FrameViewRunner::findFrameViewInstallation()
             m_installPath = installPath;
             // Convert wide string version to narrow string
             if (!frameViewInfo->version.empty()) {
-                m_version = std::string(frameViewInfo->version.begin(), frameViewInfo->version.end());
+                const std::wstring& wv = frameViewInfo->version;
+                int size = WideCharToMultiByte(CP_UTF8, 0, wv.c_str(), static_cast<int>(wv.size()),
+                                               nullptr, 0, nullptr, nullptr);
+                if (size > 0) {
+                    m_version.resize(size);
+                    WideCharToMultiByte(CP_UTF8, 0, wv.c_str(), static_cast<int>(wv.size()),
+                                        m_version.data(), size, nullptr, nullptr);
+                }
             }
             return installPath;
         }
@@ -161,7 +166,7 @@ void FrameViewRunner::killFrameViewProcesses()
     LOG_INFO("FrameViewRunner: Process cleanup completed");
 }
 
-bool FrameViewRunner::prepareFrameViewCopy(const std::filesystem::path& sourceDir)
+bool FrameViewRunner::prepareFrameViewCopy(const std::filesystem::path& sourceDir, std::string& outError)
 {
     LOG_INFO("FrameViewRunner: Preparing FrameView copy...");
 
@@ -179,7 +184,6 @@ bool FrameViewRunner::prepareFrameViewCopy(const std::filesystem::path& sourceDi
         LOG_INFO("FrameViewRunner: Copying FrameView from: %s", sourceDir.string().c_str());
         LOG_INFO("FrameViewRunner: Copying FrameView to: %s", m_frameViewCopyPath.string().c_str());
 
-        // Copy all contents
         for (const auto& entry : std::filesystem::recursive_directory_iterator(sourceDir)) {
             const auto& sourcePath = entry.path();
             auto relativePath = std::filesystem::relative(sourcePath, sourceDir);
@@ -198,13 +202,13 @@ bool FrameViewRunner::prepareFrameViewCopy(const std::filesystem::path& sourceDi
         return true;
 
     } catch (const std::filesystem::filesystem_error& e) {
-        m_error = std::string("Failed to copy FrameView: ") + e.what();
-        LOG_ERROR("FrameViewRunner: %s", m_error.c_str());
+        outError = std::string("Failed to copy FrameView: ") + e.what();
+        LOG_ERROR("FrameViewRunner: %s", outError.c_str());
         return false;
     }
 }
 
-bool FrameViewRunner::modifyIniFile()
+bool FrameViewRunner::modifyIniFile(std::string& outError)
 {
     LOG_INFO("FrameViewRunner: Modifying Settings.ini...");
 
@@ -212,23 +216,21 @@ bool FrameViewRunner::modifyIniFile()
         std::filesystem::path settingsIniPath = m_frameViewCopyPath / "Settings.ini";
 
         if (!std::filesystem::exists(settingsIniPath)) {
-            m_error = "Settings.ini not found at: " + settingsIniPath.string();
-            LOG_ERROR("FrameViewRunner: %s", m_error.c_str());
+            outError = "Settings.ini not found at: " + settingsIniPath.string();
+            LOG_ERROR("FrameViewRunner: %s", outError.c_str());
             return false;
         }
 
-        // Read existing content
         std::ifstream inputFile(settingsIniPath);
         if (!inputFile.is_open()) {
-            m_error = "Failed to open Settings.ini for reading";
-            LOG_ERROR("FrameViewRunner: %s", m_error.c_str());
+            outError = "Failed to open Settings.ini for reading";
+            LOG_ERROR("FrameViewRunner: %s", outError.c_str());
             return false;
         }
 
         std::vector<std::string> lines;
         std::string line;
         while (std::getline(inputFile, line)) {
-            // Skip lines we want to replace
             if (line.find("CaptureOnLaunchDurationInSeconds") != std::string::npos) {
                 LOG_INFO("FrameViewRunner: Removing existing CaptureOnLaunchDurationInSeconds");
                 continue;
@@ -241,21 +243,18 @@ bool FrameViewRunner::modifyIniFile()
         }
         inputFile.close();
 
-        // Add our settings
         lines.push_back("CaptureOnLaunchDurationInSeconds=1");
         
-        // Convert output directory to string (use forward slashes for consistency)
         std::string outputDirStr = m_outputDirectory.string();
         std::replace(outputDirStr.begin(), outputDirStr.end(), '\\', '/');
         lines.push_back("BenchmarkDirectory=" + outputDirStr);
 
         LOG_INFO("FrameViewRunner: Setting BenchmarkDirectory=%s", outputDirStr.c_str());
 
-        // Write modified content
         std::ofstream outputFile(settingsIniPath);
         if (!outputFile.is_open()) {
-            m_error = "Failed to open Settings.ini for writing";
-            LOG_ERROR("FrameViewRunner: %s", m_error.c_str());
+            outError = "Failed to open Settings.ini for writing";
+            LOG_ERROR("FrameViewRunner: %s", outError.c_str());
             return false;
         }
 
@@ -268,13 +267,13 @@ bool FrameViewRunner::modifyIniFile()
         return true;
 
     } catch (const std::exception& e) {
-        m_error = std::string("Failed to modify Settings.ini: ") + e.what();
-        LOG_ERROR("FrameViewRunner: %s", m_error.c_str());
+        outError = std::string("Failed to modify Settings.ini: ") + e.what();
+        LOG_ERROR("FrameViewRunner: %s", outError.c_str());
         return false;
     }
 }
 
-bool FrameViewRunner::launchFrameView()
+bool FrameViewRunner::launchFrameView(std::string& outError)
 {
     ProcessManager processManager;
     std::filesystem::path frameViewExePath = m_frameViewCopyPath / "FrameView_x64.exe";
@@ -289,15 +288,14 @@ bool FrameViewRunner::launchFrameView()
             LOG_INFO("FrameViewRunner: Successfully launched FrameView (PID: %u)", processInfo.id);
             return true;
         } else {
-            m_error = "Failed to launch FrameView - invalid process info";
-            LOG_ERROR("FrameViewRunner: %s", m_error.c_str());
+            outError = "Failed to launch FrameView - invalid process info";
+            LOG_ERROR("FrameViewRunner: %s", outError.c_str());
             return false;
         }
 
     } catch (const std::exception& e) {
         std::string errorMsg = e.what();
 
-        // Check if elevation is required (error code 740)
         if (errorMsg.find("Error code: 740") != std::string::npos) {
             LOG_WARN("FrameViewRunner: FrameView requires elevation, attempting elevated launch...");
 
@@ -310,19 +308,19 @@ bool FrameViewRunner::launchFrameView()
                              processInfo.id);
                     return true;
                 } else {
-                    m_error = "Failed to launch FrameView with elevation - invalid process info";
-                    LOG_ERROR("FrameViewRunner: %s", m_error.c_str());
+                    outError = "Failed to launch FrameView with elevation - invalid process info";
+                    LOG_ERROR("FrameViewRunner: %s", outError.c_str());
                     return false;
                 }
 
             } catch (const std::exception& elevatedError) {
-                m_error = std::string("Failed to launch FrameView with elevation: ") + elevatedError.what();
-                LOG_ERROR("FrameViewRunner: %s", m_error.c_str());
+                outError = std::string("Failed to launch FrameView with elevation: ") + elevatedError.what();
+                LOG_ERROR("FrameViewRunner: %s", outError.c_str());
                 return false;
             }
         } else {
-            m_error = std::string("Failed to launch FrameView: ") + e.what();
-            LOG_ERROR("FrameViewRunner: %s", m_error.c_str());
+            outError = std::string("Failed to launch FrameView: ") + e.what();
+            LOG_ERROR("FrameViewRunner: %s", outError.c_str());
             return false;
         }
     }

@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <string>
 #include <set>
+#include <memory>
 
 /**
  * @class FrameViewRunner
@@ -17,30 +18,34 @@
  * 
  * Usage:
  *   {
- *       FrameViewRunner frameView;
- *       if (!frameView.isValid()) {
+ *       std::string error;
+ *       auto frameView = FrameViewRunner::create(error);
+ *       if (!frameView) {
  *           // Handle error
  *       }
  *       
  *       // Run tests...
- *       auto csv = frameView.findLatestCsvForApp("MyGame.exe");
- *       frameView.notifyCsvConsumed(csv);
+ *       auto csv = frameView->findLatestCsvForApp("MyGame.exe");
+ *       frameView->notifyCsvConsumed(csv);
  *   }  // Destructor cleans up FrameView processes
  */
 class FrameViewRunner
 {
 public:
     /**
-     * @brief Constructor - finds FrameView, creates isolated copy, and starts it
+     * @brief Create and initialize a FrameViewRunner
      * 
-     * On construction:
+     * Performs the full initialization sequence:
      * 1. Kills any existing FrameView processes
      * 2. Finds FrameView installation (registry or common paths)
      * 3. Copies FrameView to temp directory for isolation
      * 4. Configures Settings.ini with output directory
      * 5. Launches FrameView_x64.exe
+     * 
+     * @param outError Populated with a description on failure
+     * @return A valid FrameViewRunner, or nullptr on failure
      */
-    FrameViewRunner();
+    static std::unique_ptr<FrameViewRunner> create(std::string& outError);
     
     /**
      * @brief Destructor - kills FrameView processes
@@ -54,26 +59,14 @@ public:
     FrameViewRunner& operator=(FrameViewRunner&&) = delete;
     
     /**
-     * @brief Check if FrameView was successfully started
-     * @return true if FrameView is running and ready
-     */
-    bool isValid() const { return m_valid; }
-    
-    /**
-     * @brief Get error message if isValid() returns false
-     * @return Error description
-     */
-    std::string getError() const { return m_error; }
-    
-    /**
      * @brief Get the detected FrameView installation path
-     * @return Path to FrameView installation, or empty if not found
+     * @return Path to FrameView installation
      */
     std::filesystem::path getInstallPath() const { return m_installPath; }
     
     /**
      * @brief Get the detected FrameView version
-     * @return Version string, or empty if not found
+     * @return Version string, or empty if not determined
      */
     std::string getVersion() const { return m_version; }
     
@@ -98,41 +91,17 @@ public:
     void notifyCsvConsumed(const std::filesystem::path& path);
 
 private:
-    /**
-     * @brief Find FrameView installation path
-     * @return Path to FrameView installation, or empty if not found
-     */
+    FrameViewRunner() = default;
+
     std::filesystem::path findFrameViewInstallation();
-    
-    /**
-     * @brief Kill all running FrameView-related processes
-     */
     void killFrameViewProcesses();
-    
-    /**
-     * @brief Copy FrameView installation to isolated temp directory
-     * @param sourceDir Source FrameView installation path
-     * @return true if successful
-     */
-    bool prepareFrameViewCopy(const std::filesystem::path& sourceDir);
-    
-    /**
-     * @brief Modify Settings.ini in the copy to set output directory
-     * @return true if successful
-     */
-    bool modifyIniFile();
-    
-    /**
-     * @brief Launch FrameView_x64.exe from the copy
-     * @return true if successful
-     */
-    bool launchFrameView();
+    bool prepareFrameViewCopy(const std::filesystem::path& sourceDir, std::string& outError);
+    bool modifyIniFile(std::string& outError);
+    bool launchFrameView(std::string& outError);
 
     std::filesystem::path m_installPath;         ///< Original FrameView installation path
     std::string m_version;                       ///< FrameView version
     std::filesystem::path m_frameViewCopyPath;   ///< Path to copied FrameView
     std::filesystem::path m_outputDirectory;     ///< Where CSVs are written
     std::set<std::filesystem::path> m_consumedCsvs;  ///< CSVs already consumed
-    bool m_valid = false;
-    std::string m_error;
 };
