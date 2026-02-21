@@ -336,6 +336,13 @@ std::filesystem::path FrameViewRunner::findLatestCsvForApp(const std::string& ap
         return {};
     }
 
+    // Snapshot the consumed set so we don't hold the lock during directory I/O
+    std::set<std::filesystem::path> consumedSnapshot;
+    {
+        std::lock_guard<std::mutex> lock(m_csvMutex);
+        consumedSnapshot = m_consumedCsvs;
+    }
+
     std::filesystem::path latestCsv;
     std::filesystem::file_time_type latestTime;
     bool foundAny = false;
@@ -348,23 +355,19 @@ std::filesystem::path FrameViewRunner::findLatestCsvForApp(const std::string& ap
 
             const auto& filePath = entry.path();
             
-            // Must be a CSV file
             if (filePath.extension() != ".csv") {
                 continue;
             }
 
-            // Must contain the app name
             std::string filename = filePath.filename().string();
             if (filename.find(appName) == std::string::npos) {
                 continue;
             }
 
-            // Must not be already consumed
-            if (m_consumedCsvs.count(filePath) > 0) {
+            if (consumedSnapshot.count(filePath) > 0) {
                 continue;
             }
 
-            // Check if this is the latest
             auto writeTime = entry.last_write_time();
             if (!foundAny || writeTime > latestTime) {
                 latestTime = writeTime;
@@ -390,6 +393,7 @@ std::filesystem::path FrameViewRunner::findLatestCsvForApp(const std::string& ap
 void FrameViewRunner::notifyCsvConsumed(const std::filesystem::path& path)
 {
     if (!path.empty()) {
+        std::lock_guard<std::mutex> lock(m_csvMutex);
         m_consumedCsvs.insert(path);
         LOG_INFO("FrameViewRunner: Marked CSV as consumed: %s", path.string().c_str());
     }

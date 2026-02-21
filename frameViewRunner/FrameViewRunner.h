@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <string>
 #include <set>
+#include <mutex>
 #include <memory>
 
 /**
@@ -104,4 +105,5 @@ private:
     std::filesystem::path m_frameViewCopyPath;   ///< Path to copied FrameView
     std::filesystem::path m_outputDirectory;     ///< Where CSVs are written
     std::set<std::filesystem::path> m_consumedCsvs;  ///< CSVs already consumed
+    mutable std::mutex m_csvMutex;                   ///< Guards m_consumedCsvs
 };
