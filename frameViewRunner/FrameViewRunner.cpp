@@ -181,6 +181,18 @@ bool FrameViewRunner::prepareFrameViewCopy(const std::filesystem::path& sourceDi
         std::filesystem::create_directories(m_frameViewCopyPath);
         std::filesystem::create_directories(m_outputDirectory);
 
+        // Clean up any leftover CSVs from previous runs
+        int removedCsvs = 0;
+        for (const auto& entry : std::filesystem::directory_iterator(m_outputDirectory)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".csv") {
+                std::filesystem::remove(entry.path());
+                ++removedCsvs;
+            }
+        }
+        if (removedCsvs > 0) {
+            LOG_INFO("FrameViewRunner: Removed %d leftover CSV file(s) from results directory", removedCsvs);
+        }
+
         LOG_INFO("FrameViewRunner: Copying FrameView from: %s", sourceDir.string().c_str());
         LOG_INFO("FrameViewRunner: Copying FrameView to: %s", m_frameViewCopyPath.string().c_str());
 
