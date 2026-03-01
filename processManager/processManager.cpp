@@ -6,6 +6,8 @@
 #include <stdexcept>
 #include <iostream>
 #include <vector>
+#include <algorithm>
+#include <set>
 #include "utils/log/ILog.h"
 
 // Helper function to convert std::string to std::wstring (static to avoid linker collision)
@@ -261,4 +263,149 @@ bool ProcessManager::isProcessRunning(const ProcessInfo& processInfo) {
 
     // If exit code is STILL_ACTIVE, the process is still running
     return (exitCode == STILL_ACTIVE);
+}
+
+std::vector<ProcessManager::ProcessInfo> ProcessManager::findAllProcessesWithImage(const std::string& sName) {
+    std::vector<ProcessInfo> results;
+
+    HANDLE hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hProcessSnap == INVALID_HANDLE_VALUE) {
+        LOG_ERROR("CreateToolhelp32Snapshot failed");
+        return results;
+    }
+
+    PROCESSENTRY32 pe32;
+    pe32.dwSize = sizeof(PROCESSENTRY32);
+
+    if (!Process32First(hProcessSnap, &pe32)) {
+        CloseHandle(hProcessSnap);
+        return results;
+    }
+
+    std::wstring wsSearchName = StringToWString(sName);
+
+    do {
+        std::wstring wsProcessName(pe32.szExeFile);
+        if (_wcsicmp(wsProcessName.c_str(), wsSearchName.c_str()) == 0) {
+            results.emplace_back(pe32.th32ProcessID, WStringToString(wsProcessName));
+        }
+    } while (Process32Next(hProcessSnap, &pe32));
+
+    CloseHandle(hProcessSnap);
+    LOG_INFO("Found %zu processes matching '%s'", results.size(), sName.c_str());
+    return results;
+}
+
+struct EnumWindowsCallbackData {
+    uint32_t targetPid;
+    HWND resultHwnd;
+    std::wstring resultTitle;
+};
+
+static BOOL CALLBACK FindMainWindowCallback(HWND hwnd, LPARAM lParam) {
+    auto* data = reinterpret_cast<EnumWindowsCallbackData*>(lParam);
+
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+
+    if (pid != data->targetPid)
+        return TRUE;
+
+    if (!IsWindowVisible(hwnd))
+        return TRUE;
+
+    // Skip windows without titles (toolbars, tray icons, etc.)
+    wchar_t title[512];
+    int len = GetWindowTextW(hwnd, title, 512);
+    if (len <= 0)
+        return TRUE;
+
+    data->resultHwnd = hwnd;
+    data->resultTitle = std::wstring(title, len);
+    return FALSE;
+}
+
+ProcessManager::WindowInfo ProcessManager::findMainWindow(uint32_t processId) {
+    EnumWindowsCallbackData data{};
+    data.targetPid = processId;
+    data.resultHwnd = nullptr;
+
+    EnumWindows(FindMainWindowCallback, reinterpret_cast<LPARAM>(&data));
+
+    WindowInfo info;
+    if (data.resultHwnd) {
+        info.handle = data.resultHwnd;
+        info.title = WStringToString(data.resultTitle);
+    }
+    return info;
+}
+
+struct EnumAllWindowsData {
+    std::set<uint32_t> targetPids;
+    std::vector<std::pair<HWND, std::wstring>> results;
+};
+
+static BOOL CALLBACK FindAllWindowsCallback(HWND hwnd, LPARAM lParam) {
+    auto* data = reinterpret_cast<EnumAllWindowsData*>(lParam);
+
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+
+    if (!data->targetPids.count(pid))
+        return TRUE;
+
+    if (!IsWindowVisible(hwnd))
+        return TRUE;
+
+    wchar_t title[512];
+    int len = GetWindowTextW(hwnd, title, 512);
+    if (len <= 0)
+        return TRUE;
+
+    data->results.emplace_back(hwnd, std::wstring(title, len));
+    return TRUE;
+}
+
+std::vector<ProcessManager::WindowInfo> ProcessManager::findAllWindows(const std::string& imageName) {
+    auto procs = findAllProcessesWithImage(imageName);
+
+    std::set<uint32_t> pids;
+    for (const auto& p : procs)
+        pids.insert(p.id);
+
+    EnumAllWindowsData data;
+    data.targetPids = std::move(pids);
+    EnumWindows(FindAllWindowsCallback, reinterpret_cast<LPARAM>(&data));
+
+    std::vector<WindowInfo> results;
+    for (const auto& [hwnd, wtitle] : data.results) {
+        WindowInfo wi;
+        wi.handle = hwnd;
+        wi.title = WStringToString(wtitle);
+        results.push_back(wi);
+    }
+    return results;
+}
+
+bool ProcessManager::bringWindowToForeground(const WindowInfo& windowInfo) {
+    if (!windowInfo.isValid())
+        return false;
+
+    HWND hwnd = static_cast<HWND>(windowInfo.handle);
+
+    if (IsIconic(hwnd))
+        ShowWindow(hwnd, SW_RESTORE);
+
+    DWORD foregroundThread = GetWindowThreadProcessId(GetForegroundWindow(), NULL);
+    DWORD ourThread = GetCurrentThreadId();
+
+    if (foregroundThread != ourThread) {
+        AttachThreadInput(foregroundThread, ourThread, TRUE);
+        SetForegroundWindow(hwnd);
+        AttachThreadInput(foregroundThread, ourThread, FALSE);
+    } else {
+        SetForegroundWindow(hwnd);
+    }
+
+    return (GetForegroundWindow() == hwnd);
 }

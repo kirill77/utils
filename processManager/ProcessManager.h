@@ -1,11 +1,11 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 class ProcessManager
 {
 public:
-    // Struct to hold process information
     struct ProcessInfo {
         uint32_t id;
         std::string imageName;
@@ -13,12 +13,22 @@ public:
         ProcessInfo() : id(0) {}
         ProcessInfo(uint32_t processId, const std::string& name) : id(processId), imageName(name) {}
         
-        // Helper to check if process info is valid
         bool isValid() const { return id != 0; }
+    };
+
+    struct WindowInfo {
+        void* handle;       // Platform window handle (HWND on Windows)
+        std::string title;
+
+        WindowInfo() : handle(nullptr) {}
+        bool isValid() const { return handle != nullptr; }
     };
 
     // returns ProcessInfo of the found process (or invalid ProcessInfo if not found)
     ProcessInfo findProcessWithImage(const std::string& sName);
+
+    // returns all processes matching the given image name
+    std::vector<ProcessInfo> findAllProcessesWithImage(const std::string& sName);
 
     bool killProcess(const ProcessInfo& processInfo);
 
@@ -30,6 +40,15 @@ public:
     
     // checks if a process is still running
     bool isProcessRunning(const ProcessInfo& processInfo);
+
+    // finds the main visible window belonging to a process
+    WindowInfo findMainWindow(uint32_t processId);
+
+    // finds all visible titled windows belonging to processes with the given image name
+    std::vector<WindowInfo> findAllWindows(const std::string& imageName);
+
+    // brings a window to the foreground and gives it input focus
+    static bool bringWindowToForeground(const WindowInfo& windowInfo);
 
 private:
 };
