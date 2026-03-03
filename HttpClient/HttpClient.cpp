@@ -42,7 +42,7 @@ HttpResponse HttpClient::get(const std::wstring &url,
         return resp;
     }
 
-    HINTERNET hSession = WinHttpOpen(L"worm/1.0",
+    HINTERNET hSession = WinHttpOpen(L"WinHttpClient/1.0",
                                      WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                                      WINHTTP_NO_PROXY_NAME,
                                      WINHTTP_NO_PROXY_BYPASS, 0);

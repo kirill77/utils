@@ -111,7 +111,7 @@ bool OpenXRSession::createInstance()
 
     XrInstanceCreateInfo createInfo = {XR_TYPE_INSTANCE_CREATE_INFO};
     createInfo.applicationInfo.apiVersion = XR_CURRENT_API_VERSION;
-    strncpy_s(createInfo.applicationInfo.applicationName, "Worm Simulation", XR_MAX_APPLICATION_NAME_SIZE);
+    strncpy_s(createInfo.applicationInfo.applicationName, "visLib", XR_MAX_APPLICATION_NAME_SIZE);
     strncpy_s(createInfo.applicationInfo.engineName, "visLib", XR_MAX_ENGINE_NAME_SIZE);
     createInfo.applicationInfo.applicationVersion = 1;
     createInfo.applicationInfo.engineVersion = 1;
