@@ -11,7 +11,7 @@ namespace visLib {
 class D3D12SwapChain
 {
 public:
-    D3D12SwapChain(ID3D12Device* pDevice, HWND hWnd);
+    D3D12SwapChain(ID3D12Device* pDevice, HWND hWnd, IDXGIFactory6* pFactory);
     ~D3D12SwapChain() = default;
 
     // Swap chain access

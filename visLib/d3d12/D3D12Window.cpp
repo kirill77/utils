@@ -8,6 +8,7 @@
 namespace visLib {
 
 D3D12Window::D3D12Window(const WindowConfig& config)
+    : m_d3d12Overrides(config.d3d12Overrides)
 {
     // Create Win32 window for input
     Win32WindowConfig winConfig;
@@ -39,6 +40,7 @@ D3D12Window::~D3D12Window()
     // Release DirectX resources before window is destroyed
     m_pSwapChain.reset();
     m_device.Reset();
+    m_dxgiFactory.Reset();
 }
 
 bool D3D12Window::isOpen() const
@@ -94,14 +96,21 @@ bool D3D12Window::initDirectX()
     }
 #endif
 
-    // Create DXGI factory
-    Microsoft::WRL::ComPtr<IDXGIFactory6> dxgiFactory;
-    ThrowIfFailed(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&dxgiFactory)));
+    // Create DXGI factory -- use interposer override if provided
+    auto fnCreateFactory = m_d3d12Overrides.pfnCreateDXGIFactory2
+        ? m_d3d12Overrides.pfnCreateDXGIFactory2
+        : ::CreateDXGIFactory2;
+    ThrowIfFailed(fnCreateFactory(dxgiFactoryFlags, IID_PPV_ARGS(&m_dxgiFactory)));
+
+    // Select function for device creation -- use interposer override if provided
+    auto fnCreateDevice = m_d3d12Overrides.pfnD3D12CreateDevice
+        ? m_d3d12Overrides.pfnD3D12CreateDevice
+        : ::D3D12CreateDevice;
 
     // Create D3D12 device
     Microsoft::WRL::ComPtr<IDXGIAdapter1> hardwareAdapter;
     for (UINT adapterIndex = 0;
-         DXGI_ERROR_NOT_FOUND != dxgiFactory->EnumAdapters1(adapterIndex, &hardwareAdapter);
+         DXGI_ERROR_NOT_FOUND != m_dxgiFactory->EnumAdapters1(adapterIndex, &hardwareAdapter);
          ++adapterIndex) {
         DXGI_ADAPTER_DESC1 adapterDesc;
         hardwareAdapter->GetDesc1(&adapterDesc);
@@ -112,15 +121,15 @@ bool D3D12Window::initDirectX()
         }
 
         // Try to create the device
-        if (SUCCEEDED(D3D12CreateDevice(hardwareAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device)))) {
+        if (SUCCEEDED(fnCreateDevice(hardwareAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device)))) {
             break;
         }
     }
 
     if (!m_device) {
         // Use WARP adapter if no hardware adapter found
-        ThrowIfFailed(dxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&hardwareAdapter)));
-        ThrowIfFailed(D3D12CreateDevice(hardwareAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device)));
+        ThrowIfFailed(m_dxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&hardwareAdapter)));
+        ThrowIfFailed(fnCreateDevice(hardwareAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device)));
     }
 
 #ifdef _DEBUG
@@ -132,11 +141,11 @@ bool D3D12Window::initDirectX()
     }
 #endif
 
-    // Create D3D12SwapChain
-    m_pSwapChain = std::make_shared<D3D12SwapChain>(m_device.Get(), m_window->getHandle());
+    // Create D3D12SwapChain, passing the (possibly interposed) factory
+    m_pSwapChain = std::make_shared<D3D12SwapChain>(m_device.Get(), m_window->getHandle(), m_dxgiFactory.Get());
 
     // Disable Alt+Enter fullscreen toggle
-    ThrowIfFailed(dxgiFactory->MakeWindowAssociation(m_window->getHandle(), DXGI_MWA_NO_ALT_ENTER));
+    ThrowIfFailed(m_dxgiFactory->MakeWindowAssociation(m_window->getHandle(), DXGI_MWA_NO_ALT_ENTER));
 
     return true;
 }

@@ -8,7 +8,7 @@
 
 namespace visLib {
 
-D3D12SwapChain::D3D12SwapChain(ID3D12Device* pDevice, HWND hWnd)
+D3D12SwapChain::D3D12SwapChain(ID3D12Device* pDevice, HWND hWnd, IDXGIFactory6* pFactory)
     : m_pDevice(pDevice), m_hWnd(hWnd)
 {
     // Get descriptor sizes
@@ -44,15 +44,11 @@ D3D12SwapChain::D3D12SwapChain(ID3D12Device* pDevice, HWND hWnd)
     UINT width = clientRect.right - clientRect.left;
     UINT height = clientRect.bottom - clientRect.top;
 
-    // Create DXGI factory
-    Microsoft::WRL::ComPtr<IDXGIFactory6> factory;
-    hr = CreateDXGIFactory2(0, IID_PPV_ARGS(&factory));
-    if (FAILED(hr)) throw std::runtime_error("Failed to create DXGI factory");
-
     // Create D3D12Queue (which creates and manages the command queue)
     m_pQueue = std::make_shared<D3D12Queue>(m_pDevice);
 
-    // Create swap chain
+    // Create swap chain using the factory provided by D3D12Window
+    // (may be an SL-interposed factory for Frame Generation support)
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.Width = width;
     swapChainDesc.Height = height;
@@ -68,7 +64,7 @@ D3D12SwapChain::D3D12SwapChain(ID3D12Device* pDevice, HWND hWnd)
     swapChainDesc.Flags = 0;
 
     Microsoft::WRL::ComPtr<IDXGISwapChain1> swapChain1;
-    hr = factory->CreateSwapChainForHwnd(m_pQueue->getQueue(), m_hWnd, &swapChainDesc, nullptr, nullptr, &swapChain1);
+    hr = pFactory->CreateSwapChainForHwnd(m_pQueue->getQueue(), m_hWnd, &swapChainDesc, nullptr, nullptr, &swapChain1);
     if (FAILED(hr)) throw std::runtime_error("Failed to create swap chain");
 
     hr = swapChain1.As(&m_pSwapChain);

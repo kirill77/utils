@@ -4,10 +4,30 @@
 #include <string>
 #include <memory>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#include <dxgi.h>
+#include <d3d12.h>
+#endif
+
 namespace visLib {
 
 // Forward declarations
 class InputState;
+
+#ifdef _WIN32
+// Optional overrides for D3D12/DXGI creation functions.
+// When set, these are used instead of the standard Windows APIs, allowing
+// an interposer (e.g., Streamline) to proxy device and factory creation.
+struct D3D12CreationOverrides {
+    using FnCreateDXGIFactory2 = HRESULT(WINAPI*)(UINT Flags, REFIID riid, void** ppFactory);
+    using FnD3D12CreateDevice  = HRESULT(WINAPI*)(IUnknown* pAdapter, D3D_FEATURE_LEVEL MinimumFeatureLevel, REFIID riid, void** ppDevice);
+
+    FnCreateDXGIFactory2 pfnCreateDXGIFactory2 = nullptr;
+    FnD3D12CreateDevice  pfnD3D12CreateDevice  = nullptr;
+};
+#endif
 
 // Window creation configuration
 struct WindowConfig {
@@ -23,6 +43,10 @@ struct WindowConfig {
     // Falls back to desktop window if VR is not available.
     // When VR is active, width/height are ignored (headset resolution is used).
     bool preferVR = false;
+
+#ifdef _WIN32
+    D3D12CreationOverrides d3d12Overrides;
+#endif
 };
 
 // Abstract window interface
