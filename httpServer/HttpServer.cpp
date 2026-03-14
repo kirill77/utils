@@ -76,6 +76,7 @@ bool HttpServer::start(const HttpServerConfig& config)
     // Start server thread
     m_bRunning = true;
     m_serverThread = std::thread(&HttpServer::serverLoop, this);
+    SetThreadDescription(m_serverThread.native_handle(), L"HttpServerLoop");
     
     return true;
 }

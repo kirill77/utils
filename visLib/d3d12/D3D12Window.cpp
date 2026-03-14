@@ -107,10 +107,11 @@ bool D3D12Window::initDirectX()
         ? m_d3d12Overrides.pfnD3D12CreateDevice
         : ::D3D12CreateDevice;
 
-    // Create D3D12 device
+    // Create D3D12 device — prefer high-performance (discrete) GPU over integrated
     Microsoft::WRL::ComPtr<IDXGIAdapter1> hardwareAdapter;
     for (UINT adapterIndex = 0;
-         DXGI_ERROR_NOT_FOUND != m_dxgiFactory->EnumAdapters1(adapterIndex, &hardwareAdapter);
+         DXGI_ERROR_NOT_FOUND != m_dxgiFactory->EnumAdapterByGpuPreference(
+             adapterIndex, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&hardwareAdapter));
          ++adapterIndex) {
         DXGI_ADAPTER_DESC1 adapterDesc;
         hardwareAdapter->GetDesc1(&adapterDesc);
