@@ -24,9 +24,9 @@ D3D12Renderer::D3D12Renderer(D3D12Window* pWindow, const RendererConfig& config)
 D3D12Renderer::~D3D12Renderer()
 {
     // Wait for GPU before cleanup
-    if (m_pWindow && m_pWindow->getSwapChain())
+    if (m_pWindow && m_pWindow->getOrCreateSwapChain())
     {
-        auto pQueue = m_pWindow->getSwapChain()->getQueue();
+        auto pQueue = m_pWindow->getOrCreateSwapChain()->getQueue();
         if (pQueue)
         {
             pQueue->flush();
@@ -41,7 +41,7 @@ std::shared_ptr<IMesh> D3D12Renderer::createMesh()
 
 std::shared_ptr<IFont> D3D12Renderer::createFont(uint32_t fontSize)
 {
-    auto pQueue = m_pWindow->getSwapChain()->getQueue();
+    auto pQueue = m_pWindow->getOrCreateSwapChain()->getQueue();
     // Desktop swap chain uses UNORM format
     return std::make_shared<D3D12Font>(fontSize, pQueue.get(), DXGI_FORMAT_R8G8B8A8_UNORM);
 }
@@ -271,14 +271,14 @@ void D3D12Renderer::initializeRenderResources()
 
 std::shared_ptr<IQuery> D3D12Renderer::createQuery(QueryCapability capabilities, uint32_t slotCount)
 {
-    auto pSwapChain = m_pWindow->getSwapChain();
+    auto pSwapChain = m_pWindow->getOrCreateSwapChain();
     auto pQueue = pSwapChain->getQueue();
     return std::make_shared<D3D12Query>(m_pWindow->getDevice(), pQueue->getQueue(), capabilities, slotCount);
 }
 
 box3 D3D12Renderer::render(IQuery* query)
 {
-    auto pSwapChain = m_pWindow->getSwapChain();
+    auto pSwapChain = m_pWindow->getOrCreateSwapChain();
     auto pQueue = pSwapChain->getQueue();
     auto pCmdList = pQueue->beginRecording();
 
@@ -497,14 +497,14 @@ void D3D12Renderer::renderMeshNode(const MeshNode& node, const affine3& parentTr
 
 void D3D12Renderer::present()
 {
-    auto pSwapChain = m_pWindow->getSwapChain();
+    auto pSwapChain = m_pWindow->getOrCreateSwapChain();
     ThrowIfFailed(pSwapChain->getSwapChain()->Present(1, 0));
     m_frameIndex++;
 }
 
 void D3D12Renderer::waitForGPU()
 {
-    auto pSwapChain = m_pWindow->getSwapChain();
+    auto pSwapChain = m_pWindow->getOrCreateSwapChain();
     if (pSwapChain)
     {
         auto pQueue = pSwapChain->getQueue();

@@ -142,13 +142,16 @@ bool D3D12Window::initDirectX()
     }
 #endif
 
-    // Create D3D12SwapChain, passing the (possibly interposed) factory
-    m_pSwapChain = std::make_shared<D3D12SwapChain>(m_device.Get(), m_window->getHandle(), m_dxgiFactory.Get());
-
-    // Disable Alt+Enter fullscreen toggle
-    ThrowIfFailed(m_dxgiFactory->MakeWindowAssociation(m_window->getHandle(), DXGI_MWA_NO_ALT_ENTER));
-
     return true;
+}
+
+D3D12SwapChain* D3D12Window::getOrCreateSwapChain()
+{
+    if (!m_pSwapChain) {
+        m_pSwapChain = std::make_shared<D3D12SwapChain>(m_device.Get(), m_window->getHandle(), m_dxgiFactory.Get());
+        ThrowIfFailed(m_dxgiFactory->MakeWindowAssociation(m_window->getHandle(), DXGI_MWA_NO_ALT_ENTER));
+    }
+    return m_pSwapChain.get();
 }
 
 void D3D12Window::onWindowResize(uint32_t width, uint32_t height, void* userData)

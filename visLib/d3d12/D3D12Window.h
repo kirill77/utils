@@ -29,7 +29,11 @@ public:
 
     // D3D12-specific accessors (used by D3D12Renderer)
     ID3D12Device* getDevice() const { return m_device.Get(); }
-    D3D12SwapChain* getSwapChain() const { return m_pSwapChain.get(); }
+
+    // Lazily creates the swap chain on first call.
+    // This allows middleware (e.g. Streamline) to register the device
+    // after D3D12Window construction but before any DXGI swap chain calls.
+    D3D12SwapChain* getOrCreateSwapChain();
 
 private:
     bool initDirectX();
