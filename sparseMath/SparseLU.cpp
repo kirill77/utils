@@ -65,7 +65,7 @@ bool SparseLU::factorize(int m,
         m_Qinv[m_Q[j]] = j;
 
     // ------------------------------------------------------------------
-    // 3. Left-looking LU with threshold partial pivoting.
+    // 3. Left-looking LU with Gilbert-Peierls DFS and threshold pivoting.
     //    L and U are built directly as CSC during factorization.
     // ------------------------------------------------------------------
     m_P.resize(m);
@@ -80,6 +80,23 @@ bool SparseLU::factorize(int m,
     m_uRowIdx.clear();
     m_uValues.clear();
 
+    // Reserve estimated nnz for L and U to reduce reallocations
+    int inputNnz = static_cast<int>(bRowIdx.size());
+    int estNnz = std::max(inputNnz * 3, m);
+    m_lRowIdx.reserve(estNnz);
+    m_lValues.reserve(estNnz);
+    m_uRowIdx.reserve(estNnz);
+    m_uValues.reserve(estNnz);
+
+    // Row-to-L-position index for O(nnz_row) row swaps during pivoting
+    std::vector<std::vector<int>> rowToLPos(m);
+
+    // Gilbert-Peierls DFS workspace
+    std::vector<int> topOrder;
+    std::vector<bool> visited(m, false);
+    std::vector<int> dfsStack;
+    std::vector<int> dfsPos(m);
+
     // Reusable dense column workspace
     std::vector<double> col(m);
 
@@ -91,9 +108,52 @@ bool SparseLU::factorize(int m,
         for (int p = bColStart[bj]; p < bColStart[bj + 1]; ++p)
             col[m_Pinv[bRowIdx[p]]] = bValues[p];
 
-        // Apply previous L columns (sparse): col -= L_col_k * col[k]
-        for (int k = 0; k < j; ++k)
+        // Gilbert-Peierls DFS: find reach of b_j in L (columns 0..j-1).
+        // Produces topOrder in postorder; iterate in reverse for forward-sub.
+        topOrder.clear();
+        for (int p = bColStart[bj]; p < bColStart[bj + 1]; ++p)
         {
+            int row = m_Pinv[bRowIdx[p]];
+            if (row < j && !visited[row])
+            {
+                visited[row] = true;
+                dfsPos[row] = m_lColStart[row];
+                dfsStack.push_back(row);
+
+                while (!dfsStack.empty())
+                {
+                    int k = dfsStack.back();
+                    bool pushed = false;
+                    while (dfsPos[k] < m_lColStart[k + 1])
+                    {
+                        int child = m_lRowIdx[dfsPos[k]];
+                        ++dfsPos[k];
+                        if (child < j && !visited[child])
+                        {
+                            visited[child] = true;
+                            dfsPos[child] = m_lColStart[child];
+                            dfsStack.push_back(child);
+                            pushed = true;
+                            break;
+                        }
+                    }
+                    if (!pushed)
+                    {
+                        topOrder.push_back(k);
+                        dfsStack.pop_back();
+                    }
+                }
+            }
+        }
+
+        // Clear visited flags (only touched columns)
+        for (int k : topOrder)
+            visited[k] = false;
+
+        // Apply L columns in topological order (reverse of postorder)
+        for (int idx = static_cast<int>(topOrder.size()) - 1; idx >= 0; --idx)
+        {
+            int k = topOrder[idx];
             double ukj = col[k];
             if (std::fabs(ukj) > 1e-15)
             {
@@ -131,23 +191,12 @@ bool SparseLU::factorize(int m,
             m_Pinv[oldP] = j;
             m_Pinv[oldJ] = pivotRow;
 
-            // Swap corresponding rows in previous L columns (sparse CSC).
-            // Row order may become unsorted; solve loops don't require order.
-            for (int k = 0; k < j; ++k)
-            {
-                int idxJ = -1, idxP = -1;
-                for (int p = m_lColStart[k]; p < m_lColStart[k + 1]; ++p)
-                {
-                    if (m_lRowIdx[p] == j) idxJ = p;
-                    else if (m_lRowIdx[p] == pivotRow) idxP = p;
-                }
-                if (idxJ >= 0 && idxP >= 0)
-                    std::swap(m_lValues[idxJ], m_lValues[idxP]);
-                else if (idxJ >= 0)
-                    m_lRowIdx[idxJ] = pivotRow;
-                else if (idxP >= 0)
-                    m_lRowIdx[idxP] = j;
-            }
+            // Swap rows j <-> pivotRow in L using row-position index
+            for (int pos : rowToLPos[j])
+                m_lRowIdx[pos] = pivotRow;
+            for (int pos : rowToLPos[pivotRow])
+                m_lRowIdx[pos] = j;
+            std::swap(rowToLPos[j], rowToLPos[pivotRow]);
         }
 
         // Store U column j: rows 0..j (upper triangular including diagonal)
@@ -168,8 +217,10 @@ bool SparseLU::factorize(int m,
             double lij = col[i] / pivot;
             if (std::fabs(lij) > 1e-15)
             {
+                int pos = static_cast<int>(m_lRowIdx.size());
                 m_lRowIdx.push_back(i);
                 m_lValues.push_back(lij);
+                rowToLPos[i].push_back(pos);
             }
         }
         m_lColStart[j + 1] = static_cast<int>(m_lRowIdx.size());
@@ -233,7 +284,7 @@ void SparseLU::solveRight(std::vector<double>& rhs) const
 // ---------------------------------------------------------------------------
 // solveLeft  (BTRAN):  B_new^T * y = rhs
 //   B_new = B * E_1 * ... * E_k,  B = P*L*U*Q^T
-//   y = P^T * L^{-T} * U^{-T} * Q^T * E_1^{-T} * ... * E_k^{-T} * rhs
+//   y = P * L^{-T} * U^{-T} * Q^T * E_1^{-T} * ... * E_k^{-T} * rhs
 // ---------------------------------------------------------------------------
 void SparseLU::solveLeft(std::vector<double>& rhs) const
 {
@@ -271,9 +322,9 @@ void SparseLU::solveLeft(std::vector<double>& rhs) const
             m_tmp[j] -= m_lValues[p] * m_tmp[m_lRowIdx[p]];
     }
 
-    // Step 5: apply P^T
+    // Step 5: apply P (scatter from internal to original row order)
     for (int i = 0; i < m; ++i)
-        rhs[m_Pinv[i]] = m_tmp[i];
+        rhs[m_P[i]] = m_tmp[i];
 }
 
 // ---------------------------------------------------------------------------

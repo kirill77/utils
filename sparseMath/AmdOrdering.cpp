@@ -2,12 +2,9 @@
 
 #include <algorithm>
 #include <numeric>
-#include <unordered_set>
 
 namespace sparseMath {
 
-// Build the symmetric sparsity pattern of A^T*A (column intersection graph),
-// then greedily eliminate the minimum-degree node, updating neighbor degrees.
 std::vector<int> AmdOrdering::compute(int nCols,
                                        const std::vector<int>& colStart,
                                        const std::vector<int>& rowIdx)
@@ -15,36 +12,37 @@ std::vector<int> AmdOrdering::compute(int nCols,
     // Build row->column lists first, then derive column adjacency.
     int nRows = 0;
     for (int j = 0; j < nCols; ++j)
-    {
         for (int p = colStart[j]; p < colStart[j + 1]; ++p)
-        {
             if (rowIdx[p] >= nRows)
                 nRows = rowIdx[p] + 1;
-        }
-    }
 
-    // row -> set of columns
     std::vector<std::vector<int>> rowToCols(nRows);
     for (int j = 0; j < nCols; ++j)
-    {
         for (int p = colStart[j]; p < colStart[j + 1]; ++p)
             rowToCols[rowIdx[p]].push_back(j);
-    }
 
-    // Column adjacency using unordered_set — O(1) insert, no sort/dedup needed.
-    std::vector<std::unordered_set<int>> adj(nCols);
+    // Build column adjacency via sorted edge list — cache-friendly.
+    std::vector<std::pair<int, int>> edges;
     for (int i = 0; i < nRows; ++i)
     {
         const auto& cols = rowToCols[i];
         for (size_t a = 0; a < cols.size(); ++a)
-        {
             for (size_t b = a + 1; b < cols.size(); ++b)
             {
-                adj[cols[a]].insert(cols[b]);
-                adj[cols[b]].insert(cols[a]);
+                edges.push_back({cols[a], cols[b]});
+                edges.push_back({cols[b], cols[a]});
             }
-        }
     }
+    std::sort(edges.begin(), edges.end());
+    edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
+
+    std::vector<std::vector<int>> adj(nCols);
+    for (auto& e : edges)
+        adj[e.first].push_back(e.second);
+    // Each adj[u] is sorted since edges were sorted by (first, second).
+
+    edges.clear();
+    edges.shrink_to_fit();
 
     // Degree of each node = adjacency size
     std::vector<int> degree(nCols);
@@ -98,6 +96,10 @@ std::vector<int> AmdOrdering::compute(int nCols,
         headOfBucket[d] = node;
     };
 
+    // Reusable buffers (avoid per-iteration heap allocations)
+    std::vector<int> neighbors;
+    std::vector<int> mergeBuffer;
+
     for (int step = 0; step < nCols; ++step)
     {
         // Advance minBucket to first non-empty bucket
@@ -111,7 +113,7 @@ std::vector<int> AmdOrdering::compute(int nCols,
         eliminated[best] = true;
 
         // Collect active neighbors
-        std::vector<int> neighbors;
+        neighbors.clear();
         neighbors.reserve(adj[best].size());
         for (int nb : adj[best])
         {
@@ -119,28 +121,47 @@ std::vector<int> AmdOrdering::compute(int nCols,
                 neighbors.push_back(nb);
         }
 
-        // Mass elimination: make neighbors pairwise adjacent
-        for (size_t a = 0; a < neighbors.size(); ++a)
+        // Sort neighbors for efficient merge below
+        std::sort(neighbors.begin(), neighbors.end());
+
+        // Mass elimination: make neighbors pairwise adjacent, remove 'best',
+        // and update degrees — all in a single sorted-merge pass per neighbor.
+        for (int u : neighbors)
         {
-            for (size_t b = a + 1; b < neighbors.size(); ++b)
+            // Merge adj[u] with neighbors, excluding 'best' and 'u'
+            mergeBuffer.clear();
+            mergeBuffer.reserve(adj[u].size() + neighbors.size());
+
+            size_t ai = 0, ni = 0;
+            while (ai < adj[u].size() && ni < neighbors.size())
             {
-                int u = neighbors[a];
-                int v = neighbors[b];
-                adj[u].insert(v);
-                adj[v].insert(u);
+                int av = adj[u][ai];
+                int nv = neighbors[ni];
+                if (av == best) { ++ai; continue; }
+                if (nv == u)    { ++ni; continue; }
+
+                if (av < nv)      { mergeBuffer.push_back(av); ++ai; }
+                else if (av > nv) { mergeBuffer.push_back(nv); ++ni; }
+                else              { mergeBuffer.push_back(av); ++ai; ++ni; }
             }
-        }
-
-        // Remove 'best' from adjacency and update degrees
-        for (int nb : neighbors)
-        {
-            adj[nb].erase(best);
-
-            int newDeg = static_cast<int>(adj[nb].size());
-            if (newDeg != degree[nb])
+            while (ai < adj[u].size())
             {
-                removeFromBucket(nb);
-                insertIntoBucket(nb, newDeg);
+                if (adj[u][ai] != best) mergeBuffer.push_back(adj[u][ai]);
+                ++ai;
+            }
+            while (ni < neighbors.size())
+            {
+                if (neighbors[ni] != u) mergeBuffer.push_back(neighbors[ni]);
+                ++ni;
+            }
+
+            adj[u].swap(mergeBuffer);
+
+            int newDeg = static_cast<int>(adj[u].size());
+            if (newDeg != degree[u])
+            {
+                removeFromBucket(u);
+                insertIntoBucket(u, newDeg);
                 if (newDeg < minBucket)
                     minBucket = newDeg;
             }

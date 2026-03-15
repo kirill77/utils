@@ -721,6 +721,88 @@ static void test_multiple_rhs()
 }
 
 // -----------------------------------------------------------------------
+// Test 13: non-involution row permutation (3-cycle in P)
+//   Catches bugs where BTRAN uses Pinv instead of P (or vice versa).
+//   A permutation P is an involution iff P == Pinv (only fixed points and
+//   transpositions). Tests 1-12 only exercise identity or transposition
+//   permutations, so a Pinv/P mix-up goes undetected. This test uses a
+//   matrix that forces two cascading row swaps sharing an element, producing
+//   a 3-cycle P = [2,0,1] where Pinv = [1,2,0] != P.
+// -----------------------------------------------------------------------
+static void test_non_involution_permutation()
+{
+    printf("test_non_involution_permutation... ");
+
+    // B = [ 1    10    0.001]
+    //     [ 1     1    1    ]
+    //     [ 1    10   10    ]
+    //
+    // With AMD ordering Q = [2,1,0] on this dense matrix, factorization:
+    //   Step 0 (col 2): pivot at row 2, swap rows 0<->2.
+    //   Step 1 (col 1): after L-solve col[1]~0, col[2]~10, swap rows 1<->2.
+    // Result: P = [2,0,1] (a 3-cycle), Pinv = [1,2,0] != P.
+    std::vector<std::vector<double>> B = {
+        {1,  10, 0.001},
+        {1,   1, 1    },
+        {1,  10, 10   }
+    };
+    std::vector<std::vector<double>> cols = {
+        {1, 1, 1},       // col 0
+        {10, 1, 10},     // col 1
+        {0.001, 1, 10},  // col 2
+    };
+    CSC csc = denseToCSC(cols, 3);
+
+    std::vector<int> basisCols = {0, 1, 2};
+    std::vector<int> artSign;
+
+    sparseMath::SparseLU lu;
+    bool ok = lu.factorize(3, basisCols, csc.colStart, csc.rowIdx, csc.values,
+                           artSign, 3);
+    CHECK(ok, "non-involution: factorize should succeed");
+
+    // FTRAN: solve B*x = rhs
+    std::vector<double> rhs = {1.0, 2.0, 3.0};
+    std::vector<double> x = rhs;
+    lu.solveRight(x);
+    std::vector<double> Bx = matvec(B, x);
+    double err = maxAbsError(Bx, rhs);
+    CHECK(err < TOL, "non-involution FTRAN: B*x != rhs");
+
+    // BTRAN: solve B^T*y = rhs — this is the critical check
+    std::vector<double> y = rhs;
+    lu.solveLeft(y);
+    std::vector<double> BTy = matvecT(B, y);
+    err = maxAbsError(BTy, rhs);
+    CHECK(err < TOL, "non-involution BTRAN: B^T*y != rhs");
+
+    // Transpose consistency: (B^{-1}*e_i)^T * e_j == e_i^T * (B^{-T}*e_j)
+    // for all pairs (i,j). Tests that FTRAN and BTRAN are true transposes.
+    for (int i = 0; i < 3; ++i)
+    {
+        std::vector<double> ei(3, 0.0);
+        ei[i] = 1.0;
+        std::vector<double> xi = ei;
+        lu.solveRight(xi);  // xi = B^{-1} * e_i
+
+        for (int j = 0; j < 3; ++j)
+        {
+            std::vector<double> ej(3, 0.0);
+            ej[j] = 1.0;
+            std::vector<double> yj = ej;
+            lu.solveLeft(yj);  // yj = B^{-T} * e_j
+
+            double lhs = xi[j];  // (B^{-1} e_i)^T e_j = xi[j]
+            double rval = yj[i]; // e_i^T (B^{-T} e_j) = yj[i]
+            double diff = std::fabs(lhs - rval);
+            CHECK(diff < TOL, "non-involution: FTRAN/BTRAN transpose mismatch");
+        }
+    }
+
+    printf("OK\n");
+}
+
+// -----------------------------------------------------------------------
 // main
 // -----------------------------------------------------------------------
 int main()
@@ -739,6 +821,7 @@ int main()
     test_amd_ordering();
     test_column_subset();
     test_multiple_rhs();
+    test_non_involution_permutation();
 
     printf("\n=== All tests passed ===\n");
     return 0;
