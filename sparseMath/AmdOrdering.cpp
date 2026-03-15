@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <unordered_set>
 
 namespace sparseMath {
 
@@ -30,9 +31,8 @@ std::vector<int> AmdOrdering::compute(int nCols,
             rowToCols[rowIdx[p]].push_back(j);
     }
 
-    // Column adjacency using sorted vectors (better cache performance than
-    // unordered_set). Duplicates are removed after construction.
-    std::vector<std::vector<int>> adj(nCols);
+    // Column adjacency using unordered_set — O(1) insert, no sort/dedup needed.
+    std::vector<std::unordered_set<int>> adj(nCols);
     for (int i = 0; i < nRows; ++i)
     {
         const auto& cols = rowToCols[i];
@@ -40,41 +40,72 @@ std::vector<int> AmdOrdering::compute(int nCols,
         {
             for (size_t b = a + 1; b < cols.size(); ++b)
             {
-                adj[cols[a]].push_back(cols[b]);
-                adj[cols[b]].push_back(cols[a]);
+                adj[cols[a]].insert(cols[b]);
+                adj[cols[b]].insert(cols[a]);
             }
         }
     }
 
-    // Sort and deduplicate adjacency lists
-    for (int j = 0; j < nCols; ++j)
-    {
-        std::sort(adj[j].begin(), adj[j].end());
-        adj[j].erase(std::unique(adj[j].begin(), adj[j].end()), adj[j].end());
-    }
-
-    // Degree of each node in the elimination graph
+    // Degree of each node = adjacency size
     std::vector<int> degree(nCols);
     for (int j = 0; j < nCols; ++j)
         degree[j] = static_cast<int>(adj[j].size());
+
+    // Doubly-linked-list bucket queue for O(1) extract-min
+    std::vector<int> headOfBucket(nCols, -1);
+    std::vector<int> nextInBucket(nCols, -1);
+    std::vector<int> prevInBucket(nCols, -1);
+
+    // Insert all nodes into their degree buckets
+    for (int j = 0; j < nCols; ++j)
+    {
+        int d = degree[j];
+        if (headOfBucket[d] != -1)
+            prevInBucket[headOfBucket[d]] = j;
+        nextInBucket[j] = headOfBucket[d];
+        prevInBucket[j] = -1;
+        headOfBucket[d] = j;
+    }
+
+    int minBucket = 0;
+    while (minBucket < nCols && headOfBucket[minBucket] == -1)
+        ++minBucket;
 
     std::vector<bool> eliminated(nCols, false);
     std::vector<int> perm;
     perm.reserve(nCols);
 
+    auto removeFromBucket = [&](int node)
+    {
+        int d = degree[node];
+        if (prevInBucket[node] != -1)
+            nextInBucket[prevInBucket[node]] = nextInBucket[node];
+        else
+            headOfBucket[d] = nextInBucket[node];
+        if (nextInBucket[node] != -1)
+            prevInBucket[nextInBucket[node]] = prevInBucket[node];
+        nextInBucket[node] = -1;
+        prevInBucket[node] = -1;
+    };
+
+    auto insertIntoBucket = [&](int node, int d)
+    {
+        degree[node] = d;
+        if (headOfBucket[d] != -1)
+            prevInBucket[headOfBucket[d]] = node;
+        nextInBucket[node] = headOfBucket[d];
+        prevInBucket[node] = -1;
+        headOfBucket[d] = node;
+    };
+
     for (int step = 0; step < nCols; ++step)
     {
-        // Find the un-eliminated node with minimum degree
-        int best = -1;
-        int bestDeg = nCols + 1;
-        for (int j = 0; j < nCols; ++j)
-        {
-            if (!eliminated[j] && degree[j] < bestDeg)
-            {
-                bestDeg = degree[j];
-                best = j;
-            }
-        }
+        // Advance minBucket to first non-empty bucket
+        while (minBucket < nCols && headOfBucket[minBucket] == -1)
+            ++minBucket;
+
+        int best = headOfBucket[minBucket];
+        removeFromBucket(best);
 
         perm.push_back(best);
         eliminated[best] = true;
@@ -95,31 +126,24 @@ std::vector<int> AmdOrdering::compute(int nCols,
             {
                 int u = neighbors[a];
                 int v = neighbors[b];
-                auto it = std::lower_bound(adj[u].begin(), adj[u].end(), v);
-                if (it == adj[u].end() || *it != v)
-                {
-                    adj[u].insert(it, v);
-                    auto it2 = std::lower_bound(adj[v].begin(), adj[v].end(), u);
-                    adj[v].insert(it2, u);
-                }
+                adj[u].insert(v);
+                adj[v].insert(u);
             }
         }
 
         // Remove 'best' from adjacency and update degrees
         for (int nb : neighbors)
         {
-            auto it = std::lower_bound(adj[nb].begin(), adj[nb].end(), best);
-            if (it != adj[nb].end() && *it == best)
-                adj[nb].erase(it);
+            adj[nb].erase(best);
 
-            // Recount non-eliminated neighbors for accurate degree
-            int newDeg = 0;
-            for (int x : adj[nb])
+            int newDeg = static_cast<int>(adj[nb].size());
+            if (newDeg != degree[nb])
             {
-                if (!eliminated[x])
-                    ++newDeg;
+                removeFromBucket(nb);
+                insertIntoBucket(nb, newDeg);
+                if (newDeg < minBucket)
+                    minBucket = newDeg;
             }
-            degree[nb] = newDeg;
         }
 
         adj[best].clear();

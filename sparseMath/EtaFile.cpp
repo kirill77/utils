@@ -5,57 +5,68 @@
 
 namespace sparseMath {
 
+void EtaFile::clear()
+{
+    m_indices.clear();
+    m_values.clear();
+    m_starts.clear();
+    m_starts.push_back(0);
+    m_pivotRows.clear();
+    m_pivotValues.clear();
+}
+
 void EtaFile::addUpdate(int pivotRow, const std::vector<double>& enteringColDense, int m)
 {
     assert(pivotRow >= 0 && pivotRow < m && "addUpdate: pivotRow out of range");
     assert(std::fabs(enteringColDense[pivotRow]) > 1e-15 &&
            "addUpdate: zero pivot value");
 
-    EtaVector eta;
-    eta.pivotRow = pivotRow;
-    eta.pivotValue = enteringColDense[pivotRow];
+    if (m_starts.empty())
+        m_starts.push_back(0);
+
+    m_pivotRows.push_back(pivotRow);
+    m_pivotValues.push_back(enteringColDense[pivotRow]);
 
     for (int i = 0; i < m; ++i)
     {
         if (i != pivotRow && std::fabs(enteringColDense[i]) > 1e-15)
         {
-            eta.indices.push_back(i);
-            eta.values.push_back(enteringColDense[i]);
+            m_indices.push_back(i);
+            m_values.push_back(enteringColDense[i]);
         }
     }
-    m_etas.push_back(std::move(eta));
+    m_starts.push_back(static_cast<int>(m_indices.size()));
 }
 
 void EtaFile::applyForward(std::vector<double>& rhs) const
 {
-    // Apply E_1^{-1}, E_2^{-1}, ..., E_k^{-1} in forward order (FTRAN).
-    // E^{-1} * x:
-    //   x[pivotRow] = x[pivotRow] / pivotValue
-    //   x[i] -= eta[i] * x[pivotRow]   for off-pivot i
-    for (const auto& eta : m_etas)
+    int n = count();
+    for (int k = 0; k < n; ++k)
     {
-        double yPivot = rhs[eta.pivotRow] / eta.pivotValue;
-        rhs[eta.pivotRow] = yPivot;
+        int pivotRow = m_pivotRows[k];
+        double yPivot = rhs[pivotRow] / m_pivotValues[k];
+        rhs[pivotRow] = yPivot;
 
-        for (size_t k = 0; k < eta.indices.size(); ++k)
-            rhs[eta.indices[k]] -= eta.values[k] * yPivot;
+        int start = m_starts[k];
+        int end   = m_starts[k + 1];
+        for (int p = start; p < end; ++p)
+            rhs[m_indices[p]] -= m_values[p] * yPivot;
     }
 }
 
 void EtaFile::applyBackward(std::vector<double>& rhs) const
 {
-    // Apply E_k^{-T}, E_{k-1}^{-T}, ..., E_1^{-T} in reverse order (BTRAN).
-    // E^{-T} * x:
-    //   x[pivotRow] = (x[pivotRow] - sum(eta[i]*x[i] for off-pivot)) / pivotValue
-    //   x[i] unchanged   for off-pivot i
-    for (int j = static_cast<int>(m_etas.size()) - 1; j >= 0; --j)
+    for (int k = count() - 1; k >= 0; --k)
     {
-        const auto& eta = m_etas[j];
+        int pivotRow = m_pivotRows[k];
         double sum = 0.0;
-        for (size_t k = 0; k < eta.indices.size(); ++k)
-            sum += eta.values[k] * rhs[eta.indices[k]];
 
-        rhs[eta.pivotRow] = (rhs[eta.pivotRow] - sum) / eta.pivotValue;
+        int start = m_starts[k];
+        int end   = m_starts[k + 1];
+        for (int p = start; p < end; ++p)
+            sum += m_values[p] * rhs[m_indices[p]];
+
+        rhs[pivotRow] = (rhs[pivotRow] - sum) / m_pivotValues[k];
     }
 }
 

@@ -66,6 +66,8 @@ private:
 
     EtaFile m_etaFile;
 
+    mutable std::vector<double> m_tmp; // reusable workspace for solveRight/solveLeft
+
     static constexpr double PIVOT_THRESHOLD = 0.1;
     static constexpr double SINGULAR_TOL    = 1e-13;
 };

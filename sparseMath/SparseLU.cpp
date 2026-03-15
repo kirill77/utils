@@ -24,38 +24,32 @@ bool SparseLU::factorize(int m,
 
     m_dim = m;
     m_etaFile.clear();
-
-    const size_t mm = static_cast<size_t>(m);
+    m_tmp.resize(m);
 
     // ------------------------------------------------------------------
-    // 1. Extract basis columns into flat column-major array.
-    //    dense[col * m + row] = value
+    // 1. Build basis CSC with values (structure + values in one pass)
     // ------------------------------------------------------------------
-    std::vector<double> dense(mm * mm, 0.0);
-
-    // Also build temporary CSC of basis for AMD ordering
     std::vector<int> bColStart(m + 1, 0);
     std::vector<int> bRowIdx;
+    std::vector<double> bValues;
 
     for (int j = 0; j < m; ++j)
     {
         int col = basisCols[j];
-        const size_t jOff = static_cast<size_t>(j) * mm;
         if (col < nOrigCols)
         {
             for (int p = colStart[col]; p < colStart[col + 1]; ++p)
             {
-                int row = rowIdx[p];
-                dense[jOff + row] = values[p];
-                bRowIdx.push_back(row);
+                bRowIdx.push_back(rowIdx[p]);
+                bValues.push_back(values[p]);
             }
         }
         else
         {
             int artRow = col - nOrigCols;
             double sign = (artSign.empty()) ? 1.0 : static_cast<double>(artSign[artRow]);
-            dense[jOff + artRow] = sign;
             bRowIdx.push_back(artRow);
+            bValues.push_back(sign);
         }
         bColStart[j + 1] = static_cast<int>(bRowIdx.size());
     }
@@ -70,56 +64,45 @@ bool SparseLU::factorize(int m,
     for (int j = 0; j < m; ++j)
         m_Qinv[m_Q[j]] = j;
 
-    // Reorder columns according to Q
-    std::vector<double> work(mm * mm, 0.0);
-    for (int j = 0; j < m; ++j)
-    {
-        const size_t dstOff = static_cast<size_t>(j) * mm;
-        const size_t srcOff = static_cast<size_t>(m_Q[j]) * mm;
-        for (int i = 0; i < m; ++i)
-            work[dstOff + i] = dense[srcOff + i];
-    }
-
     // ------------------------------------------------------------------
     // 3. Left-looking LU with threshold partial pivoting.
-    //    L (unit lower triangular) and U (upper triangular) stored in
-    //    flat column-major layout for cache locality.
+    //    L and U are built directly as CSC during factorization.
     // ------------------------------------------------------------------
     m_P.resize(m);
     m_Pinv.resize(m);
     std::iota(m_P.begin(), m_P.end(), 0);
     std::iota(m_Pinv.begin(), m_Pinv.end(), 0);
 
-    std::vector<double> Lmat(mm * mm, 0.0);
-    std::vector<double> Umat(mm * mm, 0.0);
-    for (int j = 0; j < m; ++j)
-        Lmat[static_cast<size_t>(j) * mm + j] = 1.0;
+    m_lColStart.assign(m + 1, 0);
+    m_lRowIdx.clear();
+    m_lValues.clear();
+    m_uColStart.assign(m + 1, 0);
+    m_uRowIdx.clear();
+    m_uValues.clear();
 
-    // Reusable column workspace (avoids allocation per column)
+    // Reusable dense column workspace
     std::vector<double> col(m);
 
     for (int j = 0; j < m; ++j)
     {
-        const size_t jOff = static_cast<size_t>(j) * mm;
+        // Scatter basis column Q[j] into workspace using Pinv mapping
+        std::fill(col.begin(), col.end(), 0.0);
+        int bj = m_Q[j];
+        for (int p = bColStart[bj]; p < bColStart[bj + 1]; ++p)
+            col[m_Pinv[bRowIdx[p]]] = bValues[p];
 
-        // Copy column j of the permuted matrix into workspace
-        for (int i = 0; i < m; ++i)
-            col[i] = work[jOff + m_P[i]];
-
-        // Apply previous L columns: for k < j, col -= L[k][...] * col[k]
+        // Apply previous L columns (sparse): col -= L_col_k * col[k]
         for (int k = 0; k < j; ++k)
         {
             double ukj = col[k];
             if (std::fabs(ukj) > 1e-15)
             {
-                const size_t kOff = static_cast<size_t>(k) * mm;
-                for (int i = k + 1; i < m; ++i)
-                    col[i] -= Lmat[kOff + i] * ukj;
+                for (int p = m_lColStart[k]; p < m_lColStart[k + 1]; ++p)
+                    col[m_lRowIdx[p]] -= m_lValues[p] * ukj;
             }
         }
 
-        // Threshold partial pivoting: among rows j..m-1, pick the one
-        // with max |col[i]|; swap if |col[j]| < threshold * max.
+        // Threshold partial pivoting: among rows j..m-1, pick max |col[i]|
         int pivotRow = j;
         double maxAbs = std::fabs(col[j]);
         for (int i = j + 1; i < m; ++i)
@@ -148,61 +131,48 @@ bool SparseLU::factorize(int m,
             m_Pinv[oldP] = j;
             m_Pinv[oldJ] = pivotRow;
 
-            // Swap corresponding rows in previous L columns
+            // Swap corresponding rows in previous L columns (sparse CSC).
+            // Row order may become unsorted; solve loops don't require order.
             for (int k = 0; k < j; ++k)
             {
-                const size_t kOff = static_cast<size_t>(k) * mm;
-                std::swap(Lmat[kOff + j], Lmat[kOff + pivotRow]);
+                int idxJ = -1, idxP = -1;
+                for (int p = m_lColStart[k]; p < m_lColStart[k + 1]; ++p)
+                {
+                    if (m_lRowIdx[p] == j) idxJ = p;
+                    else if (m_lRowIdx[p] == pivotRow) idxP = p;
+                }
+                if (idxJ >= 0 && idxP >= 0)
+                    std::swap(m_lValues[idxJ], m_lValues[idxP]);
+                else if (idxJ >= 0)
+                    m_lRowIdx[idxJ] = pivotRow;
+                else if (idxP >= 0)
+                    m_lRowIdx[idxP] = j;
             }
         }
 
-        // Store U column j (upper part including diagonal)
-        for (int i = 0; i <= j; ++i)
-            Umat[jOff + i] = col[i];
-
-        // Compute L column j (below diagonal)
-        double pivot = col[j];
-        for (int i = j + 1; i < m; ++i)
-            Lmat[jOff + i] = col[i] / pivot;
-    }
-
-    // ------------------------------------------------------------------
-    // 4. Convert flat L, U to CSC sparse storage
-    // ------------------------------------------------------------------
-    m_lColStart.assign(m + 1, 0);
-    m_lRowIdx.clear();
-    m_lValues.clear();
-    for (int j = 0; j < m; ++j)
-    {
-        const size_t jOff = static_cast<size_t>(j) * mm;
-        for (int i = j + 1; i < m; ++i)
-        {
-            double val = Lmat[jOff + i];
-            if (std::fabs(val) > 1e-15)
-            {
-                m_lRowIdx.push_back(i);
-                m_lValues.push_back(val);
-            }
-        }
-        m_lColStart[j + 1] = static_cast<int>(m_lRowIdx.size());
-    }
-
-    m_uColStart.assign(m + 1, 0);
-    m_uRowIdx.clear();
-    m_uValues.clear();
-    for (int j = 0; j < m; ++j)
-    {
-        const size_t jOff = static_cast<size_t>(j) * mm;
+        // Store U column j: rows 0..j (upper triangular including diagonal)
         for (int i = 0; i <= j; ++i)
         {
-            double val = Umat[jOff + i];
-            if (std::fabs(val) > 1e-15)
+            if (std::fabs(col[i]) > 1e-15)
             {
                 m_uRowIdx.push_back(i);
-                m_uValues.push_back(val);
+                m_uValues.push_back(col[i]);
             }
         }
         m_uColStart[j + 1] = static_cast<int>(m_uRowIdx.size());
+
+        // Store L column j: rows j+1..m-1 (strictly lower, unit diagonal not stored)
+        double pivot = col[j];
+        for (int i = j + 1; i < m; ++i)
+        {
+            double lij = col[i] / pivot;
+            if (std::fabs(lij) > 1e-15)
+            {
+                m_lRowIdx.push_back(i);
+                m_lValues.push_back(lij);
+            }
+        }
+        m_lColStart[j + 1] = static_cast<int>(m_lRowIdx.size());
     }
 
     return true;
@@ -217,18 +187,17 @@ void SparseLU::solveRight(std::vector<double>& rhs) const
 {
     int m = m_dim;
     // Step 1: apply P^T (row permute into internal order)
-    std::vector<double> tmp(m);
     for (int i = 0; i < m; ++i)
-        tmp[i] = rhs[m_P[i]];
+        m_tmp[i] = rhs[m_P[i]];
 
     // Step 2: L forward-substitution (L is unit lower triangular, stored without diagonal)
     for (int j = 0; j < m; ++j)
     {
-        double xj = tmp[j];
+        double xj = m_tmp[j];
         if (std::fabs(xj) > 1e-15)
         {
             for (int p = m_lColStart[j]; p < m_lColStart[j + 1]; ++p)
-                tmp[m_lRowIdx[p]] -= m_lValues[p] * xj;
+                m_tmp[m_lRowIdx[p]] -= m_lValues[p] * xj;
         }
     }
 
@@ -244,18 +213,18 @@ void SparseLU::solveRight(std::vector<double>& rhs) const
         assert(m_uRowIdx[pEnd - 1] == j && "solveRight: U diagonal not in expected position");
         double diag = m_uValues[pEnd - 1];
         assert(std::fabs(diag) > 1e-15 && "solveRight: zero diagonal in U");
-        tmp[j] /= diag;
-        double xj = tmp[j];
+        m_tmp[j] /= diag;
+        double xj = m_tmp[j];
         if (std::fabs(xj) > 1e-15)
         {
             for (int p = pStart; p < pEnd - 1; ++p)
-                tmp[m_uRowIdx[p]] -= m_uValues[p] * xj;
+                m_tmp[m_uRowIdx[p]] -= m_uValues[p] * xj;
         }
     }
 
     // Step 4: apply Q (column permute into basis-position space)
     for (int i = 0; i < m; ++i)
-        rhs[m_Q[i]] = tmp[i];
+        rhs[m_Q[i]] = m_tmp[i];
 
     // Step 5: apply eta updates E_1^{-1}, ..., E_k^{-1} (in basis-position space)
     m_etaFile.applyForward(rhs);
@@ -274,9 +243,8 @@ void SparseLU::solveLeft(std::vector<double>& rhs) const
     m_etaFile.applyBackward(rhs);
 
     // Step 2: apply Q^T (un-permute columns into internal order)
-    std::vector<double> tmp(m);
     for (int i = 0; i < m; ++i)
-        tmp[i] = rhs[m_Q[i]];
+        m_tmp[i] = rhs[m_Q[i]];
 
     // Step 3: U^T forward-substitution (U^T is lower triangular)
     for (int j = 0; j < m; ++j)
@@ -288,24 +256,24 @@ void SparseLU::solveLeft(std::vector<double>& rhs) const
 
         // Off-diagonals of column j are rows < j
         for (int p = pStart; p < pEnd - 1; ++p)
-            tmp[j] -= m_uValues[p] * tmp[m_uRowIdx[p]];
+            m_tmp[j] -= m_uValues[p] * m_tmp[m_uRowIdx[p]];
 
         assert(m_uRowIdx[pEnd - 1] == j && "solveLeft: U diagonal not in expected position");
         double diag = m_uValues[pEnd - 1];
         assert(std::fabs(diag) > 1e-15 && "solveLeft: zero diagonal in U");
-        tmp[j] /= diag;
+        m_tmp[j] /= diag;
     }
 
     // Step 4: L^T back-substitution (L^T is upper triangular, unit diagonal)
     for (int j = m - 1; j >= 0; --j)
     {
         for (int p = m_lColStart[j]; p < m_lColStart[j + 1]; ++p)
-            tmp[j] -= m_lValues[p] * tmp[m_lRowIdx[p]];
+            m_tmp[j] -= m_lValues[p] * m_tmp[m_lRowIdx[p]];
     }
 
     // Step 5: apply P^T
     for (int i = 0; i < m; ++i)
-        rhs[m_Pinv[i]] = tmp[i];
+        rhs[m_Pinv[i]] = m_tmp[i];
 }
 
 // ---------------------------------------------------------------------------
