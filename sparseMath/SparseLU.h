@@ -44,9 +44,6 @@ public:
     int etaCount() const { return m_etaFile.count(); }
 
 private:
-    void permuteForward(std::vector<double>& x, const std::vector<int>& perm) const;
-    void permuteBackward(std::vector<double>& x, const std::vector<int>& invPerm) const;
-
     int m_dim = 0;
 
     // L factor in CSC (unit lower triangular, diagonal = 1 not stored)

@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <numeric>
-#include <unordered_set>
 
 namespace sparseMath {
 
@@ -12,9 +11,7 @@ std::vector<int> AmdOrdering::compute(int nCols,
                                        const std::vector<int>& colStart,
                                        const std::vector<int>& rowIdx)
 {
-    // Build adjacency lists for the column intersection graph.
-    // Two columns are adjacent if they share at least one row index.
-    // We build row→column lists first, then derive column adjacency.
+    // Build row->column lists first, then derive column adjacency.
     int nRows = 0;
     for (int j = 0; j < nCols; ++j)
     {
@@ -25,7 +22,7 @@ std::vector<int> AmdOrdering::compute(int nCols,
         }
     }
 
-    // row → set of columns
+    // row -> set of columns
     std::vector<std::vector<int>> rowToCols(nRows);
     for (int j = 0; j < nCols; ++j)
     {
@@ -33,8 +30,9 @@ std::vector<int> AmdOrdering::compute(int nCols,
             rowToCols[rowIdx[p]].push_back(j);
     }
 
-    // Column adjacency (symmetric). Using unordered_set to de-duplicate.
-    std::vector<std::unordered_set<int>> adj(nCols);
+    // Column adjacency using sorted vectors (better cache performance than
+    // unordered_set). Duplicates are removed after construction.
+    std::vector<std::vector<int>> adj(nCols);
     for (int i = 0; i < nRows; ++i)
     {
         const auto& cols = rowToCols[i];
@@ -42,10 +40,17 @@ std::vector<int> AmdOrdering::compute(int nCols,
         {
             for (size_t b = a + 1; b < cols.size(); ++b)
             {
-                adj[cols[a]].insert(cols[b]);
-                adj[cols[b]].insert(cols[a]);
+                adj[cols[a]].push_back(cols[b]);
+                adj[cols[b]].push_back(cols[a]);
             }
         }
+    }
+
+    // Sort and deduplicate adjacency lists
+    for (int j = 0; j < nCols; ++j)
+    {
+        std::sort(adj[j].begin(), adj[j].end());
+        adj[j].erase(std::unique(adj[j].begin(), adj[j].end()), adj[j].end());
     }
 
     // Degree of each node in the elimination graph
@@ -74,8 +79,7 @@ std::vector<int> AmdOrdering::compute(int nCols,
         perm.push_back(best);
         eliminated[best] = true;
 
-        // Mass elimination: make neighbors of 'best' pairwise adjacent,
-        // then remove 'best' from all neighbor sets.
+        // Collect active neighbors
         std::vector<int> neighbors;
         neighbors.reserve(adj[best].size());
         for (int nb : adj[best])
@@ -84,16 +88,19 @@ std::vector<int> AmdOrdering::compute(int nCols,
                 neighbors.push_back(nb);
         }
 
+        // Mass elimination: make neighbors pairwise adjacent
         for (size_t a = 0; a < neighbors.size(); ++a)
         {
             for (size_t b = a + 1; b < neighbors.size(); ++b)
             {
                 int u = neighbors[a];
                 int v = neighbors[b];
-                if (adj[u].find(v) == adj[u].end())
+                auto it = std::lower_bound(adj[u].begin(), adj[u].end(), v);
+                if (it == adj[u].end() || *it != v)
                 {
-                    adj[u].insert(v);
-                    adj[v].insert(u);
+                    adj[u].insert(it, v);
+                    auto it2 = std::lower_bound(adj[v].begin(), adj[v].end(), u);
+                    adj[v].insert(it2, u);
                 }
             }
         }
@@ -101,13 +108,18 @@ std::vector<int> AmdOrdering::compute(int nCols,
         // Remove 'best' from adjacency and update degrees
         for (int nb : neighbors)
         {
-            adj[nb].erase(best);
-            degree[nb] = 0;
+            auto it = std::lower_bound(adj[nb].begin(), adj[nb].end(), best);
+            if (it != adj[nb].end() && *it == best)
+                adj[nb].erase(it);
+
+            // Recount non-eliminated neighbors for accurate degree
+            int newDeg = 0;
             for (int x : adj[nb])
             {
                 if (!eliminated[x])
-                    ++degree[nb];
+                    ++newDeg;
             }
+            degree[nb] = newDeg;
         }
 
         adj[best].clear();
