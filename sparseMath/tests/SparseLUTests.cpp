@@ -803,6 +803,47 @@ static void test_non_involution_permutation()
 }
 
 // -----------------------------------------------------------------------
+// Test 14: solveRight/solveLeft after failed factorize must not crash
+//   Regression for assert(m_uRowIdx[pEnd-1]==j) firing when m_uColStart
+//   is partially initialized (entries past the failure column stay zero).
+//   Real-world trigger: RevisedSimplex::phaseI calls refactorizeBasis()
+//   without checking the return value, then calls recomputeXB() which
+//   invokes solveRight on the broken LU.
+// -----------------------------------------------------------------------
+static void test_solve_after_failed_factorize()
+{
+    printf("test_solve_after_failed_factorize... ");
+
+    // B = [1 0 1; 0 1 1; 0 0 0] — rank 2, singular.
+    // AMD puts col 2 last (highest degree).  Columns 0-1 fill
+    // m_uColStart[0..2]; column 2 fails, leaving m_uColStart[3] = 0.
+    // Without the fix, solveRight hits pStart>pEnd → UB.
+    std::vector<std::vector<double>> cols = {
+        {1, 0, 0},
+        {0, 1, 0},
+        {1, 1, 0},
+    };
+    CSC csc = denseToCSC(cols, 3);
+
+    std::vector<int> basisCols = {0, 1, 2};
+    std::vector<int> artSign;
+
+    sparseMath::SparseLU lu;
+    bool ok = lu.factorize(3, basisCols, csc.colStart, csc.rowIdx, csc.values,
+                           artSign, 3);
+    CHECK(!ok, "should detect singularity");
+
+    // These must not crash (solution is meaningless, but no UB).
+    std::vector<double> rhs = {1.0, 2.0, 3.0};
+    lu.solveRight(rhs);
+
+    std::fill(rhs.begin(), rhs.end(), 1.0);
+    lu.solveLeft(rhs);
+
+    printf("OK\n");
+}
+
+// -----------------------------------------------------------------------
 // main
 // -----------------------------------------------------------------------
 int main()
@@ -822,6 +863,7 @@ int main()
     test_column_subset();
     test_multiple_rhs();
     test_non_involution_permutation();
+    test_solve_after_failed_factorize();
 
     printf("\n=== All tests passed ===\n");
     return 0;

@@ -176,7 +176,10 @@ bool SparseLU::factorize(int m,
         }
 
         if (maxAbs < SINGULAR_TOL)
+        {
+            m_dim = 0;  // reset so solveRight/solveLeft are safe no-ops
             return false;
+        }
 
         if (pivotRow != j && std::fabs(col[j]) < PIVOT_THRESHOLD * maxAbs)
         {
