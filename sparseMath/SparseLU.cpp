@@ -2,6 +2,7 @@
 #include "utils/sparseMath/AmdOrdering.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <numeric>
 
@@ -18,6 +19,9 @@ bool SparseLU::factorize(int m,
                           const std::vector<int>& artSign,
                           int nOrigCols)
 {
+    assert(m > 0 && "factorize: dimension must be positive");
+    assert(static_cast<int>(basisCols.size()) >= m && "factorize: not enough basis columns");
+
     m_dim = m;
     m_etaFile.clear();
 
@@ -205,13 +209,14 @@ bool SparseLU::factorize(int m,
 }
 
 // ---------------------------------------------------------------------------
-// solveRight  (FTRAN):  B*x = rhs  =>  P*L*E*U*Q^T * x = rhs
-//   x = Q * U^{-1} * E^{-1} * L^{-1} * P^T * rhs
+// solveRight  (FTRAN):  B_new * x = rhs
+//   B_new = B * E_1 * ... * E_k,  B = P*L*U*Q^T
+//   x = E_k^{-1} * ... * E_1^{-1} * Q * U^{-1} * L^{-1} * P^T * rhs
 // ---------------------------------------------------------------------------
 void SparseLU::solveRight(std::vector<double>& rhs) const
 {
     int m = m_dim;
-    // Step 1: apply P (row permute)
+    // Step 1: apply P^T (row permute into internal order)
     std::vector<double> tmp(m);
     for (int i = 0; i < m; ++i)
         tmp[i] = rhs[m_P[i]];
@@ -227,10 +232,7 @@ void SparseLU::solveRight(std::vector<double>& rhs) const
         }
     }
 
-    // Step 3: apply eta file forward
-    m_etaFile.applyForward(tmp);
-
-    // Step 4: U back-substitution (U is upper triangular, CSC)
+    // Step 3: U back-substitution (U is upper triangular, CSC)
     for (int j = m - 1; j >= 0; --j)
     {
         int pEnd = m_uColStart[j + 1];
@@ -238,8 +240,10 @@ void SparseLU::solveRight(std::vector<double>& rhs) const
         if (pStart == pEnd)
             continue;
 
-        // Diagonal is last entry in column (by construction)
+        // Diagonal is last entry in column (by construction: stored i=0..j)
+        assert(m_uRowIdx[pEnd - 1] == j && "solveRight: U diagonal not in expected position");
         double diag = m_uValues[pEnd - 1];
+        assert(std::fabs(diag) > 1e-15 && "solveRight: zero diagonal in U");
         tmp[j] /= diag;
         double xj = tmp[j];
         if (std::fabs(xj) > 1e-15)
@@ -249,25 +253,32 @@ void SparseLU::solveRight(std::vector<double>& rhs) const
         }
     }
 
-    // Step 5: apply Q (column permute)
+    // Step 4: apply Q (column permute into basis-position space)
     for (int i = 0; i < m; ++i)
         rhs[m_Q[i]] = tmp[i];
+
+    // Step 5: apply eta updates E_1^{-1}, ..., E_k^{-1} (in basis-position space)
+    m_etaFile.applyForward(rhs);
 }
 
 // ---------------------------------------------------------------------------
-// solveLeft  (BTRAN):  B^T*y = rhs  =>  Q*U^T*E^T*L^T*P * y = rhs
-//   y = P^T * L^{-T} * E^{-T} * U^{-T} * Q^T * rhs
+// solveLeft  (BTRAN):  B_new^T * y = rhs
+//   B_new = B * E_1 * ... * E_k,  B = P*L*U*Q^T
+//   y = P^T * L^{-T} * U^{-T} * Q^T * E_1^{-T} * ... * E_k^{-T} * rhs
 // ---------------------------------------------------------------------------
 void SparseLU::solveLeft(std::vector<double>& rhs) const
 {
     int m = m_dim;
 
-    // Step 1: apply Q^T (un-permute columns)
+    // Step 1: apply eta updates E_k^{-T}, ..., E_1^{-T} (in basis-position space)
+    m_etaFile.applyBackward(rhs);
+
+    // Step 2: apply Q^T (un-permute columns into internal order)
     std::vector<double> tmp(m);
     for (int i = 0; i < m; ++i)
         tmp[i] = rhs[m_Q[i]];
 
-    // Step 2: U^T forward-substitution (U^T is lower triangular)
+    // Step 3: U^T forward-substitution (U^T is lower triangular)
     for (int j = 0; j < m; ++j)
     {
         int pStart = m_uColStart[j];
@@ -279,12 +290,11 @@ void SparseLU::solveLeft(std::vector<double>& rhs) const
         for (int p = pStart; p < pEnd - 1; ++p)
             tmp[j] -= m_uValues[p] * tmp[m_uRowIdx[p]];
 
+        assert(m_uRowIdx[pEnd - 1] == j && "solveLeft: U diagonal not in expected position");
         double diag = m_uValues[pEnd - 1];
+        assert(std::fabs(diag) > 1e-15 && "solveLeft: zero diagonal in U");
         tmp[j] /= diag;
     }
-
-    // Step 3: apply eta file backward
-    m_etaFile.applyBackward(tmp);
 
     // Step 4: L^T back-substitution (L^T is upper triangular, unit diagonal)
     for (int j = m - 1; j >= 0; --j)
@@ -303,6 +313,9 @@ void SparseLU::solveLeft(std::vector<double>& rhs) const
 // ---------------------------------------------------------------------------
 bool SparseLU::update(int leavingRow, const std::vector<double>& enteringCol)
 {
+    assert(leavingRow >= 0 && leavingRow < m_dim && "update: leavingRow out of range");
+    assert(static_cast<int>(enteringCol.size()) >= m_dim && "update: enteringCol too small");
+
     if (std::fabs(enteringCol[leavingRow]) < SINGULAR_TOL)
         return false;
 
