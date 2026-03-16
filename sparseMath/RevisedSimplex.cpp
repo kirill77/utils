@@ -480,6 +480,8 @@ LPStatus RevisedSimplex::phaseI()
         }
 
         ++iterCount;
+        if (m_progressCallback)
+            m_progressCallback(1, iterCount);
     }
 
     return LPStatus::INFEASIBLE;
@@ -506,6 +508,8 @@ LPStatus RevisedSimplex::phaseII()
         if (rc == -1)
             return LPStatus::UNBOUNDED;
         ++iterCount;
+        if (m_progressCallback)
+            m_progressCallback(2, iterCount);
     }
     return LPStatus::MAX_ITERATIONS;
 }

@@ -4,6 +4,7 @@
 
 #include <vector>
 #include <cstddef>
+#include <functional>
 
 namespace sparseMath {
 
@@ -38,7 +39,12 @@ public:
         int    refactorInterval = 50;
     };
 
+    /// Callback: (phase 1 or 2, iteration count).
+    using ProgressCallback = std::function<void(int phase, int iteration)>;
+
     RevisedSimplex() = default;
+
+    void setProgressCallback(ProgressCallback cb) { m_progressCallback = std::move(cb); }
 
     void setParams(const Params& params);
 
@@ -119,6 +125,7 @@ private:
 
     int m_pivotsSinceRefactor = 0;
     int m_pricingStart = 0;  // rotating start for partial Dantzig pricing
+    ProgressCallback m_progressCallback;
 
     // Phase I artificial variable support
     std::vector<int>    m_artSign;       // +1 or -1 per row
