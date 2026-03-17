@@ -4,6 +4,7 @@ struct PSInput
 {
     float4 Position : SV_POSITION;
     float3 Color : COLOR;
+    float2 UV : TEXCOORD;
 };
 
 // Output structure
@@ -16,9 +17,9 @@ struct PSOutput
 PSOutput main(PSInput input)
 {
     PSOutput output;
-    
+
     // Use the interpolated color from the vertex shader
     output.Color = float4(input.Color, 1.0f);
-    
+
     return output;
 }

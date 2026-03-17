@@ -64,6 +64,9 @@
     <ClInclude Include="common\Win32InputWindow.h">
       <Filter>common</Filter>
     </ClInclude>
+    <ClInclude Include="common\QRCode.h">
+      <Filter>common</Filter>
+    </ClInclude>
   </ItemGroup>
   <!-- D3D12 Backend Headers -->
   <ItemGroup>
@@ -133,6 +136,9 @@
     <ClCompile Include="common\Win32InputWindow.cpp">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="common\QRCode.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
   </ItemGroup>
   <!-- D3D12 Backend Source Files -->
   <ItemGroup>
@@ -194,6 +200,9 @@
       <Filter>d3d12\Shaders</Filter>
     </None>
     <None Include="d3d12\Shaders\TextPixelShader.hlsl">
+      <Filter>d3d12\Shaders</Filter>
+    </None>
+    <None Include="d3d12\Shaders\QRCodePixelShader.hlsl">
       <Filter>d3d12\Shaders</Filter>
     </None>
   </ItemGroup>

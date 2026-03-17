@@ -23,9 +23,13 @@ struct RendererConfig {
     float4 clearColor = { 0.0f, 0.2f, 0.4f, 1.0f };  // Background color
     
     // Pixel shader name (matches filename without extension)
-    // e.g., "PixelShader", "HeavyPixelShader"
+    // e.g., "PixelShader", "QRCodePixelShader"
     std::string pixelShader = "PixelShader";
-    uint32_t pixelShaderIterations = 100;  // Iteration count (used by HeavyPixelShader)
+    uint32_t pixelShaderIterations = 100;  // Iteration count (used by HeavyPixelShader/QRCodePixelShader)
+
+    // Text to encode as a QR code pattern (Version 1, max 20 alphanumeric chars)
+    // Used by QRCodePixelShader
+    std::string qrCodeText = "VERDICT";
 };
 
 // Abstract renderer interface

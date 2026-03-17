@@ -8,6 +8,7 @@
 #include "utils/visLib/d3d12/internal/CD3DX12.h"
 #include "utils/visLib/d3d12/internal/D3D12ShaderHelper.h"
 #include "utils/visLib/d3d12/internal/D3D12RenderTarget.h"
+#include "utils/visLib/common/QRCode.h"
 #include <DirectXMath.h>
 
 namespace visLib {
@@ -157,7 +158,8 @@ void D3D12Renderer::initializeRenderResources()
     // Vertex input layout
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
     {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 
     // Pipeline state
@@ -232,9 +234,19 @@ void D3D12Renderer::initializeRenderResources()
                                         D3D12_RESOURCE_FLAG_NONE,
                                         D3D12_RESOURCE_STATE_GENERIC_READ);
 
-    // Initialize pixel params with iteration count
+    // Initialize pixel params with iteration count and QR code data
     PixelParamsBuffer pixelParams = {};
     pixelParams.IterationCount = m_config.pixelShaderIterations;
+    pixelParams.QRSize = QRCode::SIZE;
+
+    // Encode QR code and pack into constant buffer
+    if (!m_config.qrCodeText.empty()) {
+        QRCode qr = QRCode::encode(m_config.qrCodeText);
+        auto packed = qr.pack();
+        for (int i = 0; i < QRCode::PACKED_UINT32S; i++) {
+            pixelParams.QRData[i] = packed[i];
+        }
+    }
     
     uint8_t* pMappedPixelParams = nullptr;
     CD3DX12_RANGE readRangePixel(0, 0);

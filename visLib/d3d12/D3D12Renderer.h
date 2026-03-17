@@ -67,7 +67,9 @@ private:
 
     struct PixelParamsBuffer {
         uint32_t IterationCount;
-        uint32_t _padding[3];  // Align to 16 bytes
+        uint32_t QRSize;         // QR code side length (21 for Version 1)
+        uint32_t _padding[2];    // Align to 16 bytes
+        uint32_t QRData[16];     // Packed QR module bits (441 bits → 14 used, 2 spare)
     };
 
     D3D12Window* m_pWindow;

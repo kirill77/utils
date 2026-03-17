@@ -7,13 +7,14 @@
 namespace visLib {
 
 // Vertex data structure for mesh geometry
-// Contains position only; future versions may add normals, UVs, colors
 struct Vertex {
     float3 position;
+    float2 uv;
 
-    Vertex() : position(0.0f, 0.0f, 0.0f) {}
-    explicit Vertex(const float3& pos) : position(pos) {}
-    Vertex(float x, float y, float z) : position(x, y, z) {}
+    Vertex() : position(0.0f, 0.0f, 0.0f), uv(0.0f, 0.0f) {}
+    explicit Vertex(const float3& pos) : position(pos), uv(0.0f, 0.0f) {}
+    Vertex(float x, float y, float z) : position(x, y, z), uv(0.0f, 0.0f) {}
+    Vertex(float x, float y, float z, float u, float v) : position(x, y, z), uv(u, v) {}
 };
 
 // Abstract mesh interface
