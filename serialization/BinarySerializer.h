@@ -61,6 +61,24 @@ public:
         }
     }
 
+    /**
+     * Write or verify a sentinel value.  On write, emits the constant.
+     * On read, reads a uint32_t and returns false if it doesn't match.
+     * Structural changes to the serialized format will misalign the
+     * stream, causing a sentinel mismatch — no manual version bump needed.
+     */
+    bool serializeSentinel(uint32_t expected)
+    {
+        uint32_t v = expected;
+        serializeRaw(v);
+        if (m_mode == SerializerMode::Read && v != expected)
+        {
+            m_pIn->setstate(std::ios::failbit);
+            return false;
+        }
+        return good();
+    }
+
     bool good() const
     {
         return m_mode == SerializerMode::Read ? m_pIn->good() : m_pOut->good();
