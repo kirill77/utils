@@ -38,6 +38,8 @@ public:
     void serialize(uint64_t& v) { serializeRaw(v); }
     void serialize(double&   v) { serializeRaw(v); }
 
+    static constexpr uint32_t DEFAULT_MAX_STRING_LEN = 1u << 20; // 1 MB
+
     void serialize(std::string& s, uint32_t maxLen = 0)
     {
         uint32_t len = static_cast<uint32_t>(s.size());
@@ -47,7 +49,8 @@ public:
         {
             if (!m_pIn->good())
                 return;
-            if (maxLen > 0 && len > maxLen)
+            uint32_t effectiveMax = (maxLen > 0) ? maxLen : DEFAULT_MAX_STRING_LEN;
+            if (len > effectiveMax)
             {
                 m_pIn->setstate(std::ios::failbit);
                 return;
