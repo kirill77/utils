@@ -116,7 +116,10 @@ uint16_t HttpServer::getPort() const
 std::string HttpServer::getUrl() const
 {
     std::ostringstream url;
-    url << "http://" << m_config.bindAddress << ":" << m_config.port << "/";
+    // 0.0.0.0 means "all interfaces" — use localhost for the display URL
+    const std::string& host = (m_config.bindAddress == "0.0.0.0" || m_config.bindAddress == "::")
+                              ? "127.0.0.1" : m_config.bindAddress;
+    url << "http://" << host << ":" << m_config.port << "/";
     return url.str();
 }
 
