@@ -71,10 +71,11 @@ void OpenXRRenderer::initializeRenderResources()
     ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 2, 0);
     ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4, 0);
 
-    CD3DX12_ROOT_PARAMETER rootParameters[3];
+    CD3DX12_ROOT_PARAMETER rootParameters[4];
     rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_ALL);
     rootParameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_ALL);
     rootParameters[2].InitAsConstants(16, 2, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+    rootParameters[3].InitAsConstants(1, 3, 0, D3D12_SHADER_VISIBILITY_PIXEL);  // Per-object iteration count at b3
 
     D3D12_STATIC_SAMPLER_DESC sampler = {};
     sampler.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
@@ -558,6 +559,10 @@ void OpenXRRenderer::renderMeshNode(const MeshNode& node, const affine3& parentT
             t.x, t.y, t.z, 1.0f
         );
         pCmdList->SetGraphicsRoot32BitConstants(2, 16, &worldMatrix, 0);
+
+        // Set per-object pixel shader iteration count
+        uint32_t iterCount = node.getPixelShaderIterations();
+        pCmdList->SetGraphicsRoot32BitConstants(3, 1, &iterCount, 0);
 
         pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 

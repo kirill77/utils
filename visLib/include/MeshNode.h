@@ -33,6 +33,10 @@ public:
     std::vector<MeshNode>& getChildren() { return m_children; }
     void clearChildren() { m_children.clear(); }
 
+    // Per-object pixel shader iteration count (for GPU load control)
+    uint32_t getPixelShaderIterations() const { return m_pixelShaderIterations; }
+    void setPixelShaderIterations(uint32_t iterations) { m_pixelShaderIterations = iterations; }
+
     // Utility methods
     bool isEmpty() const { return m_meshes.empty() && m_children.empty(); }
     void clear();
@@ -44,6 +48,7 @@ private:
     affine3 m_transform;                            // Transform from node local space to parent space
     std::vector<std::shared_ptr<IMesh>> m_meshes;   // Meshes at this node level
     std::vector<MeshNode> m_children;               // Child nodes with relative transforms
+    uint32_t m_pixelShaderIterations = 0;           // Per-object GPU load iterations
 };
 
 } // namespace visLib

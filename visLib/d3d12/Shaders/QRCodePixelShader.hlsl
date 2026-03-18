@@ -18,10 +18,16 @@ struct PSOutput
 // Constant buffer for pixel shader parameters
 cbuffer PixelParams : register(b1)
 {
-    uint IterationCount;
+    uint IterationCount;  // Legacy (unused) - iteration count now comes from per-object root constant
     uint QRSize;          // QR code side length (21 for Version 1)
     uint2 _padding;       // Align to 16 bytes
     uint QRData[16];      // Packed QR module bits (row-major, bit 0 of word 0 = [0][0])
+};
+
+// Per-object iteration count (set per draw call via root constants)
+cbuffer PerObjectParams : register(b3)
+{
+    uint PerObjectIterationCount;
 };
 
 // Read a single module from the packed QR data
@@ -54,7 +60,7 @@ PSOutput main(PSInput input)
     float accumulator = frac(input.Position.x * 0.00123f + input.Position.y * 0.00071f);
 
     [loop]
-    for (uint i = 0; i < IterationCount; i++)
+    for (uint i = 0; i < PerObjectIterationCount; i++)
     {
         float x = accumulator + float(i) * 0.01f;
         accumulator = sin(x) * cos(x * 1.1f) + accumulator * 0.5f;
