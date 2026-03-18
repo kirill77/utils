@@ -152,12 +152,14 @@
     <ClInclude Include="AmdOrdering.h" />
     <ClInclude Include="SparseLU.h" />
     <ClInclude Include="RevisedSimplex.h" />
+    <ClInclude Include="SparseMathValidation.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="EtaFile.cpp" />
     <ClCompile Include="AmdOrdering.cpp" />
     <ClCompile Include="SparseLU.cpp" />
     <ClCompile Include="RevisedSimplex.cpp" />
+    <ClCompile Include="SparseMathValidation.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

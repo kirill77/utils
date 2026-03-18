@@ -1,4 +1,5 @@
 #include "utils/sparseMath/RevisedSimplex.h"
+#include "utils/sparseMath/SparseMathValidation.h"
 
 #include <cassert>
 #include <cmath>
@@ -73,6 +74,8 @@ void RevisedSimplex::setVariableBounds(int col, double lb, double ub)
 
 LPResult RevisedSimplex::solve()
 {
+    runValidation();
+
     LPResult result;
 
     LPStatus status = phaseI();
