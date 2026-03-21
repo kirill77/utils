@@ -8,6 +8,8 @@
 #include <vector>
 #include <algorithm>
 #include <cstdlib>
+#include <thread>
+#include <chrono>
 
 namespace
 {
@@ -172,9 +174,27 @@ bool FrameViewRunner::prepareFrameViewCopy(const std::filesystem::path& sourceDi
 
     try {
         // Remove existing copy if present
+        // Retry a few times because terminated processes may still hold file locks briefly
         if (std::filesystem::exists(m_frameViewCopyPath)) {
-            std::uintmax_t removedCount = std::filesystem::remove_all(m_frameViewCopyPath);
-            LOG_INFO("FrameViewRunner: Removed existing copy (%llu items)", removedCount);
+            constexpr int maxRetries = 5;
+            constexpr int retryDelayMs = 500;
+            std::error_code ec;
+            for (int attempt = 0; attempt < maxRetries; ++attempt) {
+                std::uintmax_t removedCount = std::filesystem::remove_all(m_frameViewCopyPath, ec);
+                if (!ec) {
+                    LOG_INFO("FrameViewRunner: Removed existing copy (%llu items)", removedCount);
+                    break;
+                }
+                LOG_INFO("FrameViewRunner: remove_all attempt %d/%d failed: %s - retrying in %dms...",
+                         attempt + 1, maxRetries, ec.message().c_str(), retryDelayMs);
+                std::this_thread::sleep_for(std::chrono::milliseconds(retryDelayMs));
+            }
+            if (ec) {
+                outError = std::string("Failed to remove existing FrameView copy after ") +
+                           std::to_string(maxRetries) + " attempts: " + ec.message();
+                LOG_ERROR("FrameViewRunner: %s", outError.c_str());
+                return false;
+            }
         }
 
         // Create fresh directories
