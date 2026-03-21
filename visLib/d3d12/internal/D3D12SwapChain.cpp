@@ -38,6 +38,17 @@ D3D12SwapChain::D3D12SwapChain(ID3D12Device* pDevice, HWND hWnd, IDXGIFactory6* 
     hr = m_pDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&m_pSRVHeap));
     if (FAILED(hr)) throw std::runtime_error("Failed to create SRV descriptor heap");
 
+    // Check tearing support (required for VSync-off with flip-model swap chains)
+    {
+        Microsoft::WRL::ComPtr<IDXGIFactory5> factory5;
+        if (SUCCEEDED(pFactory->QueryInterface(IID_PPV_ARGS(&factory5)))) {
+            BOOL allowTearing = FALSE;
+            if (SUCCEEDED(factory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing)))) {
+                m_tearingSupported = (allowTearing == TRUE);
+            }
+        }
+    }
+
     // Get window client area dimensions
     RECT clientRect;
     GetClientRect(m_hWnd, &clientRect);
@@ -61,7 +72,7 @@ D3D12SwapChain::D3D12SwapChain(ID3D12Device* pDevice, HWND hWnd, IDXGIFactory6* 
     swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-    swapChainDesc.Flags = 0;
+    swapChainDesc.Flags = m_tearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
 
     Microsoft::WRL::ComPtr<IDXGISwapChain1> swapChain1;
     hr = pFactory->CreateSwapChainForHwnd(m_pQueue->getQueue(), m_hWnd, &swapChainDesc, nullptr, nullptr, &swapChain1);
@@ -96,8 +107,9 @@ void D3D12SwapChain::notifyWindowResized()
     UINT width = clientRect.right - clientRect.left;
     UINT height = clientRect.bottom - clientRect.top;
 
-    // Resize swap chain buffers
-    HRESULT hr = m_pSwapChain->ResizeBuffers(m_backBufferCount, width, height, DXGI_FORMAT_UNKNOWN, 0);
+    // Resize swap chain buffers (preserve tearing flag)
+    UINT swapChainFlags = m_tearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
+    HRESULT hr = m_pSwapChain->ResizeBuffers(m_backBufferCount, width, height, DXGI_FORMAT_UNKNOWN, swapChainFlags);
     if (FAILED(hr)) throw std::runtime_error("Failed to resize swap chain buffers");
 
     // Recreate resources with new size

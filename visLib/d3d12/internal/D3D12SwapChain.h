@@ -37,6 +37,9 @@ public:
     ID3D12DescriptorHeap* getSRVHeap() const { return m_pSRVHeap.Get(); }
     UINT getSRVDescriptorSize() const { return m_srvDescriptorSize; }
 
+    // Tearing support query (true if DXGI_PRESENT_ALLOW_TEARING is usable)
+    bool isTearingSupported() const { return m_tearingSupported; }
+
 private:
     void createBackBufferResources();
     void createDepthBuffer();
@@ -59,6 +62,9 @@ private:
     UINT m_rtvDescriptorSize = 0;
     UINT m_dsvDescriptorSize = 0;
     UINT m_srvDescriptorSize = 0;
+
+    // Tearing support (needed for VSync-off with flip-model swap chains)
+    bool m_tearingSupported = false;
 
     // Back buffer resources
     Microsoft::WRL::ComPtr<ID3D12Resource> m_pBackBuffers[m_backBufferCount];
