@@ -27,7 +27,7 @@ struct RendererConfig {
     std::string pixelShader = "PixelShader";
     uint32_t pixelShaderIterations = 100;  // Iteration count (used by HeavyPixelShader/QRCodePixelShader)
 
-    bool vsync = true;  // VSync: true = Present(1,0), false = Present(0,0)
+    int vsyncInterval = 1;  // VSync interval: 0 = no wait, 1 = every vblank, 2 = every 2nd vblank, etc.
 
     // Text to encode as a QR code pattern (Version 1, max 20 alphanumeric chars)
     // Used by QRCodePixelShader

@@ -515,8 +515,8 @@ void D3D12Renderer::renderMeshNode(const MeshNode& node, const affine3& parentTr
 void D3D12Renderer::present()
 {
     auto pSwapChain = m_pWindow->getOrCreateSwapChain();
-    const UINT syncInterval = m_config.vsync ? 1 : 0;
-    const UINT presentFlags = (!m_config.vsync && pSwapChain->isTearingSupported()) ? DXGI_PRESENT_ALLOW_TEARING : 0;
+    const UINT syncInterval = static_cast<UINT>(m_config.vsyncInterval);
+    const UINT presentFlags = (m_config.vsyncInterval == 0 && pSwapChain->isTearingSupported()) ? DXGI_PRESENT_ALLOW_TEARING : 0;
     ThrowIfFailed(pSwapChain->getSwapChain()->Present(syncInterval, presentFlags));
     m_frameIndex++;
 }
