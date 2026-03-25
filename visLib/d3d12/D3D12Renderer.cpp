@@ -7,6 +7,7 @@
 #include "utils/visLib/d3d12/internal/DirectXHelpers.h"
 #include "utils/visLib/d3d12/internal/CD3DX12.h"
 #include "utils/visLib/d3d12/internal/D3D12ShaderHelper.h"
+#include "utils/visLib/d3d12/internal/g_EmbeddedShaders.h"
 #include "utils/visLib/d3d12/internal/D3D12RenderTarget.h"
 #include "utils/visLib/common/QRCode.h"
 #include <DirectXMath.h>
@@ -138,22 +139,33 @@ void D3D12Renderer::initializeRenderResources()
     Microsoft::WRL::ComPtr<ID3DBlob> vertexShader;
     Microsoft::WRL::ComPtr<ID3DBlob> pixelShader;
 
-    // Convert pixel shader name to wide string
-    std::wstring pixelShaderName(m_config.pixelShader.begin(), m_config.pixelShader.end());
+    // Try embedded shaders first (no external files needed)
+    const char* vsSource = EmbeddedShaders::getSource("VertexShader");
+    const char* psSource = EmbeddedShaders::getSource(m_config.pixelShader);
 
-    // Try precompiled shaders
-    std::wstring shaderPath = L"Shaders/";
-    vertexShader = shaderHelper.loadCompiledShader(shaderPath + L"VertexShader.cso");
-    pixelShader = shaderHelper.loadCompiledShader(shaderPath + pixelShaderName + L".cso");
+    if (vsSource)
+        vertexShader = shaderHelper.compileFromSource("VertexShader", vsSource, "main", "vs_5_0", compileFlags);
+    if (psSource)
+        pixelShader = shaderHelper.compileFromSource(m_config.pixelShader, psSource, "main", "ps_5_0", compileFlags);
 
-    // Fallback: compile at runtime
+    // Fallback: try pre-compiled or source files on disk
     if (!vertexShader || !pixelShader)
     {
-        shaderPath = L"utils/visLib/d3d12/Shaders/";
+        std::wstring pixelShaderName(m_config.pixelShader.begin(), m_config.pixelShader.end());
+        std::wstring shaderPath = L"Shaders/";
         if (!vertexShader)
-            vertexShader = shaderHelper.loadShader(shaderPath + L"VertexShader.hlsl", "main", "vs_5_0", compileFlags);
+            vertexShader = shaderHelper.loadCompiledShader(shaderPath + L"VertexShader.cso");
         if (!pixelShader)
-            pixelShader = shaderHelper.loadShader(shaderPath + pixelShaderName + L".hlsl", "main", "ps_5_0", compileFlags);
+            pixelShader = shaderHelper.loadCompiledShader(shaderPath + pixelShaderName + L".cso");
+
+        if (!vertexShader || !pixelShader)
+        {
+            shaderPath = L"utils/visLib/d3d12/Shaders/";
+            if (!vertexShader)
+                vertexShader = shaderHelper.loadShader(shaderPath + L"VertexShader.hlsl", "main", "vs_5_0", compileFlags);
+            if (!pixelShader)
+                pixelShader = shaderHelper.loadShader(shaderPath + pixelShaderName + L".hlsl", "main", "ps_5_0", compileFlags);
+        }
     }
 
     // Vertex input layout

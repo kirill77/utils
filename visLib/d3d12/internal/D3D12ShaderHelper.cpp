@@ -100,6 +100,57 @@ Microsoft::WRL::ComPtr<ID3DBlob> D3D12ShaderHelper::loadCompiledShader(const std
     return shaderBlob;
 }
 
+Microsoft::WRL::ComPtr<ID3DBlob> D3D12ShaderHelper::compileFromSource(
+    const std::string& name,
+    const char* source,
+    const std::string& entryPoint,
+    const std::string& target,
+    UINT compileFlags)
+{
+    // Create a unique key for the shader
+    std::wstring shaderKey = std::wstring(name.begin(), name.end()) + L":" +
+        std::wstring(entryPoint.begin(), entryPoint.end()) + L":" +
+        std::wstring(target.begin(), target.end());
+
+    // Check if already loaded
+    auto it = m_shaderCache.find(shaderKey);
+    if (it != m_shaderCache.end())
+    {
+        return it->second;
+    }
+
+    // Compile from source
+    Microsoft::WRL::ComPtr<ID3DBlob> shaderBlob;
+    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+
+    HRESULT hr = D3DCompile(
+        source,
+        strlen(source),
+        name.c_str(),
+        nullptr,
+        D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        entryPoint.c_str(),
+        target.c_str(),
+        compileFlags,
+        0,
+        &shaderBlob,
+        &errorBlob);
+
+    if (FAILED(hr))
+    {
+        if (errorBlob)
+        {
+            OutputDebugStringA(static_cast<const char*>(errorBlob->GetBufferPointer()));
+        }
+        ThrowIfFailed(hr);
+    }
+
+    // Cache the shader
+    m_shaderCache[shaderKey] = shaderBlob;
+
+    return shaderBlob;
+}
+
 void D3D12ShaderHelper::clearCache()
 {
     m_shaderCache.clear();

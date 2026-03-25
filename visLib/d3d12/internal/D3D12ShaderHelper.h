@@ -24,6 +24,14 @@ public:
     // Load a pre-compiled shader (.cso file)
     Microsoft::WRL::ComPtr<ID3DBlob> loadCompiledShader(const std::wstring& filePath);
 
+    // Compile a shader from in-memory HLSL source
+    Microsoft::WRL::ComPtr<ID3DBlob> compileFromSource(
+        const std::string& name,
+        const char* source,
+        const std::string& entryPoint,
+        const std::string& target,
+        UINT compileFlags = 0);
+
     // Clear shader cache
     void clearCache();
 

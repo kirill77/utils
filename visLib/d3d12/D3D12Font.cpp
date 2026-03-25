@@ -6,6 +6,7 @@
 #include "utils/visLib/d3d12/internal/DirectXHelpers.h"
 #include "utils/visLib/d3d12/internal/CD3DX12.h"
 #include "utils/visLib/d3d12/internal/D3D12ShaderHelper.h"
+#include "utils/visLib/d3d12/internal/g_EmbeddedShaders.h"
 
 // Include stb_truetype
 #define STB_TRUETYPE_IMPLEMENTATION
@@ -234,20 +235,33 @@ void D3D12Font::createPSO(ID3D12RootSignature* pRootSignature)
     
     Microsoft::WRL::ComPtr<ID3DBlob> vertexShader;
     Microsoft::WRL::ComPtr<ID3DBlob> pixelShader;
-    
-    // Try to load pre-compiled text shaders
-    std::wstring shaderPath = L"Shaders/";
-    vertexShader = shaderHelper.loadCompiledShader(shaderPath + L"TextVertexShader.cso");
-    pixelShader = shaderHelper.loadCompiledShader(shaderPath + L"TextPixelShader.cso");
-    
-    // Fallback: Compile at runtime
+
+    // Try embedded shaders first (no external files needed)
+    const char* vsSource = EmbeddedShaders::getSource("TextVertexShader");
+    const char* psSource = EmbeddedShaders::getSource("TextPixelShader");
+
+    if (vsSource)
+        vertexShader = shaderHelper.compileFromSource("TextVertexShader", vsSource, "main", "vs_5_0", compileFlags);
+    if (psSource)
+        pixelShader = shaderHelper.compileFromSource("TextPixelShader", psSource, "main", "ps_5_0", compileFlags);
+
+    // Fallback: try pre-compiled or source files on disk
     if (!vertexShader || !pixelShader)
     {
-        shaderPath = L"utils/visLib/d3d12/Shaders/";
+        std::wstring shaderPath = L"Shaders/";
         if (!vertexShader)
-            vertexShader = shaderHelper.loadShader(shaderPath + L"TextVertexShader.hlsl", "main", "vs_5_0", compileFlags);
+            vertexShader = shaderHelper.loadCompiledShader(shaderPath + L"TextVertexShader.cso");
         if (!pixelShader)
-            pixelShader = shaderHelper.loadShader(shaderPath + L"TextPixelShader.hlsl", "main", "ps_5_0", compileFlags);
+            pixelShader = shaderHelper.loadCompiledShader(shaderPath + L"TextPixelShader.cso");
+
+        if (!vertexShader || !pixelShader)
+        {
+            shaderPath = L"utils/visLib/d3d12/Shaders/";
+            if (!vertexShader)
+                vertexShader = shaderHelper.loadShader(shaderPath + L"TextVertexShader.hlsl", "main", "vs_5_0", compileFlags);
+            if (!pixelShader)
+                pixelShader = shaderHelper.loadShader(shaderPath + L"TextPixelShader.hlsl", "main", "ps_5_0", compileFlags);
+        }
     }
     
     if (!vertexShader || !pixelShader)

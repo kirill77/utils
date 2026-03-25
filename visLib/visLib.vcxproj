@@ -71,6 +71,10 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <!-- Generate EmbeddedShaders.h from .hlsl files before compiling -->
+  <Target Name="GenerateEmbeddedShaders" BeforeTargets="ClCompile">
+    <Exec Command="powershell -ExecutionPolicy Bypass -NoProfile -File &quot;$(MSBuildThisFileDirectory)d3d12\Shaders\GenerateEmbeddedShaders.ps1&quot;" />
+  </Target>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -178,6 +182,7 @@
     <ClInclude Include="d3d12\internal\DirectXHelpers.h" />
     <ClInclude Include="d3d12\internal\D3D12Queue.h" />
     <ClInclude Include="d3d12\internal\D3D12ShaderHelper.h" />
+    <ClInclude Include="d3d12\internal\g_EmbeddedShaders.h" />
     <ClInclude Include="d3d12\internal\D3D12SwapChain.h" />
   </ItemGroup>
   <!-- OpenXR Backend Headers (VR support) -->
