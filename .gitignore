@@ -1,5 +1,6 @@
 x64/
 .vs/
+g_*
 
 # Visual Studio user-specific files (local debugging settings, etc.)
 *.vcxproj.user
