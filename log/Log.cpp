@@ -179,8 +179,12 @@ private:
 
         if (m_bEnableThreadAndFileInfo)
         {
+            const char* levelPrefix = "";
+            if (level == LogLevel::eWarning) levelPrefix = "WARN: ";
+            else if (level == LogLevel::eError) levelPrefix = "ERROR: ";
+
             char buffer[256];
-            sprintf_s(buffer, "[%s](%d)[%s[%d]] ", sTime.c_str(), GetCurrentThreadId(), sFile, uLine);
+            sprintf_s(buffer, "[%s](%d)[%s[%d]] %s", sTime.c_str(), GetCurrentThreadId(), sFile, uLine, levelPrefix);
             finalMessage = std::string(buffer) + logMessage;
         }
         else

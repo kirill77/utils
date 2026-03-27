@@ -81,7 +81,7 @@ std::time_t FileUtils::getSessionTimestamp()
     if (!s_timestampInitialized)
     {
         s_cachedRawTimestamp = std::time(nullptr);
-        s_cachedTimestampString = TimeUtils::timeStampToString(s_cachedRawTimestamp, "%Y%m%d_%H%M%S");
+        s_cachedTimestampString = TimeUtils::timeStampToLocalString(s_cachedRawTimestamp, "%Y%m%d_%H%M%S");
         s_timestampInitialized = true;
     }
     return s_cachedRawTimestamp;
