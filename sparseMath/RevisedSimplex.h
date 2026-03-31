@@ -23,6 +23,18 @@ struct LPResult
     std::vector<double> solution;
 };
 
+/// Diagnostic snapshot passed to the progress callback each reporting cycle.
+struct ProgressInfo
+{
+    int phase        = 0;   ///< 1 = Phase I (feasibility), 2 = Phase II (optimality)
+    int iteration    = 0;   ///< Iteration count within this phase
+    double sumArt    = 0.0; ///< Sum of |artificial variable values| (Phase I only)
+    int    numArt    = 0;   ///< Number of artificial variables still in basis (Phase I only)
+    double maxArt    = 0.0; ///< Largest |artificial value| (Phase I only)
+    double bestRC    = 0.0; ///< Largest |reduced cost| chosen by pricing
+    double pivotStep = 0.0; ///< Step length from ratio test (0 = degenerate pivot)
+};
+
 // Sparse LP solver: maximize c^T x  subject to  Ax = b,  lb <= x <= ub.
 //
 // The matrix A is stored in compressed sparse column (CSC) format.
@@ -39,8 +51,7 @@ public:
         int    refactorInterval = 50;
     };
 
-    /// Callback: (phase 1 or 2, iteration count).
-    using ProgressCallback = std::function<void(int phase, int iteration)>;
+    using ProgressCallback = std::function<void(const ProgressInfo& info)>;
 
     RevisedSimplex() = default;
 
@@ -126,6 +137,10 @@ private:
     int m_pivotsSinceRefactor = 0;
     int m_pricingStart = 0;  // rotating start for partial Dantzig pricing
     ProgressCallback m_progressCallback;
+
+    // Last-iterate diagnostics (populated by iterate() for the callback)
+    double m_lastBestRC    = 0.0;
+    double m_lastPivotStep = 0.0;
 
     // Phase I artificial variable support
     std::vector<int>    m_artSign;       // +1 or -1 per row

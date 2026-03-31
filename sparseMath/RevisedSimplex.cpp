@@ -484,7 +484,25 @@ LPStatus RevisedSimplex::phaseI()
 
         ++iterCount;
         if (m_progressCallback)
-            m_progressCallback(1, iterCount);
+        {
+            ProgressInfo info;
+            info.phase     = 1;
+            info.iteration = iterCount;
+            info.bestRC    = m_lastBestRC;
+            info.pivotStep = m_lastPivotStep;
+            for (int i = 0; i < m_nRows; ++i)
+            {
+                if (m_basisIndices[i] >= m_nCols)
+                {
+                    double av = std::fabs(m_xB[i]);
+                    info.sumArt += av;
+                    info.numArt++;
+                    if (av > info.maxArt)
+                        info.maxArt = av;
+                }
+            }
+            m_progressCallback(info);
+        }
     }
 
     return LPStatus::INFEASIBLE;
@@ -512,7 +530,14 @@ LPStatus RevisedSimplex::phaseII()
             return LPStatus::UNBOUNDED;
         ++iterCount;
         if (m_progressCallback)
-            m_progressCallback(2, iterCount);
+        {
+            ProgressInfo info;
+            info.phase     = 2;
+            info.iteration = iterCount;
+            info.bestRC    = m_lastBestRC;
+            info.pivotStep = m_lastPivotStep;
+            m_progressCallback(info);
+        }
     }
     return LPStatus::MAX_ITERATIONS;
 }
@@ -613,8 +638,13 @@ int RevisedSimplex::iterate(bool isPhaseI)
     }
 
     if (enterCol == -1)
+    {
+        m_lastBestRC = 0.0;
+        m_lastPivotStep = 0.0;
         return 1; // optimal
+    }
 
+    m_lastBestRC = bestRC;
     m_pricingStart = (enterCol + 1) % nTotalCols;
 
     // FTRAN: compute direction d = B^{-1} * a_q
@@ -695,6 +725,8 @@ int RevisedSimplex::iterate(bool isPhaseI)
     }
 
     assert(maxStep >= 0.0 && "iterate: negative step — basic variable outside bounds or inverted bounds");
+
+    m_lastPivotStep = maxStep;
 
     if (maxStep >= INF / 2.0)
         return -1; // unbounded
