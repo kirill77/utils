@@ -297,6 +297,13 @@ std::vector<MonitorInfo> collectMonitorInfo() {
 
 SystemInfo collectSystemInfo() {
     SystemInfo info;
+
+    wchar_t computerName[MAX_COMPUTERNAME_LENGTH + 1] = {};
+    DWORD size = static_cast<DWORD>(std::size(computerName));
+    if (GetComputerNameW(computerName, &size)) {
+        info.machineName = computerName;
+    }
+
     info.gpus = collectGpuInfo();
     info.cpu = collectCpuInfo();
     info.monitors = collectMonitorInfo();
@@ -334,8 +341,13 @@ std::string SystemInfo::hashHex() const {
 std::string SystemInfo::toCSV() const {
     std::ostringstream oss;
 
+    // Machine section
+    oss << "[Machine]\n";
+    oss << "Name\n";
+    oss << escapeCSV(wstringToUtf8(machineName)) << "\n";
+
     // GPU section
-    oss << "[GPU]\n";
+    oss << "\n[GPU]\n";
     oss << "Name,DriverVersion,DedicatedMemoryMB,VendorId,DeviceId\n";
     for (const auto& gpu : gpus) {
         oss << escapeCSV(wstringToUtf8(gpu.name)) << ","
@@ -372,7 +384,7 @@ SystemInfo SystemInfo::fromCSV(const std::string& csvData) {
     std::istringstream iss(csvData);
     std::string line;
     
-    enum class Section { None, GPU, CPU, Monitor };
+    enum class Section { None, Machine, GPU, CPU, Monitor };
     Section currentSection = Section::None;
     bool headerSkipped = false;
 
@@ -384,7 +396,11 @@ SystemInfo SystemInfo::fromCSV(const std::string& csvData) {
         }
 
         // Check for section markers
-        if (line == "[GPU]") {
+        if (line == "[Machine]") {
+            currentSection = Section::Machine;
+            headerSkipped = false;
+            continue;
+        } else if (line == "[GPU]") {
             currentSection = Section::GPU;
             headerSkipped = false;
             continue;
@@ -407,6 +423,12 @@ SystemInfo SystemInfo::fromCSV(const std::string& csvData) {
         auto fields = parseCSVLine(line);
 
         switch (currentSection) {
+        case Section::Machine:
+            if (fields.size() >= 1) {
+                info.machineName = utf8ToWstring(fields[0]);
+            }
+            break;
+
         case Section::GPU:
             if (fields.size() >= 5) {
                 GpuInfo gpu;

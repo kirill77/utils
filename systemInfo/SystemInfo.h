@@ -45,6 +45,7 @@ struct MonitorInfo {
  * @brief Aggregated information about the system hardware
  */
 struct SystemInfo {
+    std::wstring machineName;           ///< Windows computer name
     std::vector<GpuInfo> gpus;          ///< List of GPUs
     CpuInfo cpu;                        ///< CPU information
     std::vector<MonitorInfo> monitors;  ///< List of monitors
