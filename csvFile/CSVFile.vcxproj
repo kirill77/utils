@@ -146,10 +146,12 @@
   <ItemGroup>
     <ClInclude Include="CSVFileReader.h" />
     <ClInclude Include="CSVFileWriter.h" />
+    <ClInclude Include="DataCollector.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CSVFileReader.cpp" />
     <ClCompile Include="CSVFileWriter.cpp" />
+    <ClCompile Include="DataCollector.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
