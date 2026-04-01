@@ -73,8 +73,8 @@ bool ProcessManager::killProcess(const ProcessInfo& processInfo) {
         return false;
     }
 
-    // Open the process with termination rights
-    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, processInfo.id);
+    // Open the process with termination and synchronization rights
+    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, processInfo.id);
     if (hProcess == NULL) {
         DWORD error = GetLastError();
         LOG_ERROR("Failed to open process %u (%s). Error: %lu", processInfo.id, processInfo.imageName.c_str(), error);
@@ -83,12 +83,19 @@ bool ProcessManager::killProcess(const ProcessInfo& processInfo) {
 
     // Terminate the process
     BOOL result = TerminateProcess(hProcess, 1);
-    CloseHandle(hProcess);
-
     if (!result) {
         DWORD error = GetLastError();
+        CloseHandle(hProcess);
         LOG_ERROR("Failed to terminate process %u (%s). Error: %lu", processInfo.id, processInfo.imageName.c_str(), error);
         return false;
+    }
+
+    // Wait for the process to fully exit so file handles are released
+    DWORD waitResult = WaitForSingleObject(hProcess, 5000);
+    CloseHandle(hProcess);
+
+    if (waitResult != WAIT_OBJECT_0) {
+        LOG_WARN("Process %u (%s) terminated but wait timed out", processInfo.id, processInfo.imageName.c_str());
     }
 
     LOG_INFO("Successfully terminated process %u (%s)", processInfo.id, processInfo.imageName.c_str());
