@@ -426,7 +426,8 @@ LPStatus RevisedSimplex::phaseI()
         }
 
         ++iterCount;
-        if (m_progressCallback)
+        if (m_progressCallback && m_params.progressInterval > 0
+            && iterCount % m_params.progressInterval == 0)
         {
             ProgressInfo info;
             info.phase     = 1;
@@ -490,7 +491,8 @@ LPStatus RevisedSimplex::phaseII()
         if (rc == -1)
             return LPStatus::UNBOUNDED;
         ++iterCount;
-        if (m_progressCallback)
+        if (m_progressCallback && m_params.progressInterval > 0
+            && iterCount % m_params.progressInterval == 0)
         {
             ProgressInfo info;
             info.phase     = 2;

@@ -50,8 +50,9 @@ public:
     {
         double feasibilityTol = 1e-8;
         double optimalityTol  = 1e-8;
-        int    maxIterations  = 100000;
-        int    refactorInterval = 50;
+        int    maxIterations     = 100000;
+        int    refactorInterval  = 50;
+        int    progressInterval  = 100;  ///< Call progress callback every N iterations (0 = never)
     };
 
     using ProgressCallback = std::function<void(const ProgressInfo& info)>;
