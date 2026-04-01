@@ -110,6 +110,11 @@ private:
     void computeColumnInBasis(int col, std::vector<double>& result) const;
     void rebuildIsBasic();
 
+    // Replace degenerate artificial basis columns (value ~0) with original
+    // columns where possible.  Uses BTRAN per row + sparse dot products
+    // to avoid brute-force FTRAN of every candidate column.
+    void replaceArtificials();
+
     Params m_params;
 
     int m_nRows = 0;

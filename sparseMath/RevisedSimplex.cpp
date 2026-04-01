@@ -328,40 +328,7 @@ LPStatus RevisedSimplex::phaseI()
 
             // Replace any remaining artificial basis columns with original
             // columns (degenerate artificials at zero).
-            std::vector<double> col(m_nRows, 0.0);
-            for (int i = 0; i < m_nRows; ++i)
-            {
-                if (m_basisIndices[i] >= m_nCols)
-                {
-                    bool bReplaced = false;
-                    for (int j = 0; j < m_nCols && !bReplaced; ++j)
-                    {
-                        if (m_isBasic[j])
-                            continue;
-
-                        // Check if column j has a nonzero in row i
-                        computeColumnInBasis(j, col);
-                        ftran(col);
-
-                        if (std::fabs(col[i]) > 0.01)
-                        {
-                            int oldCol = m_basisIndices[i];
-                            m_isBasic[oldCol] = false;
-                            m_basisIndices[i] = j;
-                            m_isBasic[j] = true;
-                            m_xB[i] = 0.0;
-                            if (!m_lu.update(i, col))
-                            {
-                                if (!refactorizeBasis())
-                                    return LPStatus::INFEASIBLE;
-                            }
-                            else
-                                m_pivotsSinceRefactor++;
-                            bReplaced = true;
-                        }
-                    }
-                }
-            }
+            replaceArtificials();
             // Count remaining artificials — some rows may be linearly dependent
             // and have no original column to replace the artificial.
             bool anyLeft = false;
@@ -415,37 +382,7 @@ LPStatus RevisedSimplex::phaseI()
 
                 // Replace any degenerate artificials (at value 0) with
                 // original columns where possible.
-                std::vector<double> col2(m_nRows, 0.0);
-                for (int i = 0; i < m_nRows; ++i)
-                {
-                    if (m_basisIndices[i] >= m_nCols)
-                    {
-                        bool bReplaced = false;
-                        for (int j = 0; j < m_nCols && !bReplaced; ++j)
-                        {
-                            if (m_isBasic[j])
-                                continue;
-                            computeColumnInBasis(j, col2);
-                            ftran(col2);
-                            if (std::fabs(col2[i]) > 0.01)
-                            {
-                                int oldCol = m_basisIndices[i];
-                                m_isBasic[oldCol] = false;
-                                m_basisIndices[i] = j;
-                                m_isBasic[j] = true;
-                                m_xB[i] = 0.0;
-                                if (!m_lu.update(i, col2))
-                                {
-                                    if (!refactorizeBasis())
-                                        return LPStatus::INFEASIBLE;
-                                }
-                                else
-                                    m_pivotsSinceRefactor++;
-                                bReplaced = true;
-                            }
-                        }
-                    }
-                }
+                replaceArtificials();
 
                 // Count remaining artificials — some rows may be linearly
                 // dependent and have no original column to replace the
@@ -976,6 +913,72 @@ void RevisedSimplex::rebuildIsBasic()
         assert(col >= 0 && col < total && "rebuildIsBasic: basis index out of range");
         assert(!m_isBasic[col] && "rebuildIsBasic: duplicate column in basis");
         m_isBasic[col] = true;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// replaceArtificials - swap degenerate artificials out of the basis
+// ---------------------------------------------------------------------------
+
+void RevisedSimplex::replaceArtificials()
+{
+    std::vector<double> row(m_nRows);
+    std::vector<double> col(m_nRows);
+
+    for (int i = 0; i < m_nRows; ++i)
+    {
+        if (m_basisIndices[i] < m_nCols)
+            continue;   // not an artificial
+
+        // Compute row i of B^{-1} via BTRAN(e_i).
+        // Then (B^{-1} a_j)[i] = row^T a_j for any column j.
+        std::fill(row.begin(), row.end(), 0.0);
+        row[i] = 1.0;
+        btran(row);
+
+        // Find best non-basic original column: largest |row^T a_j|
+        int bestCol = -1;
+        double bestAbs = 0.0;
+        for (int j = 0; j < m_nCols; ++j)
+        {
+            if (m_isBasic[j])
+                continue;
+
+            // Sparse dot product: row^T a_j
+            double dot = 0.0;
+            for (int p = m_colStart[j]; p < m_colStart[j + 1]; ++p)
+                dot += row[m_rowIdx[p]] * m_values[p];
+
+            double absDot = std::fabs(dot);
+            if (absDot > bestAbs)
+            {
+                bestAbs = absDot;
+                bestCol = j;
+            }
+        }
+
+        if (bestCol < 0 || bestAbs <= 0.01)
+            continue;   // no suitable replacement (linearly dependent row)
+
+        // FTRAN the selected column for the LU update
+        computeColumnInBasis(bestCol, col);
+        ftran(col);
+
+        int oldCol = m_basisIndices[i];
+        m_isBasic[oldCol] = false;
+        m_basisIndices[i] = bestCol;
+        m_isBasic[bestCol] = true;
+        m_xB[i] = 0.0;
+
+        if (!m_lu.update(i, col))
+        {
+            if (!refactorizeBasis())
+                return;
+        }
+        else
+        {
+            m_pivotsSinceRefactor++;
+        }
     }
 }
 
