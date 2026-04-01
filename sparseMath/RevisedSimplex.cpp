@@ -257,6 +257,11 @@ LPStatus RevisedSimplex::phaseI()
     // Build isBasic: original vars are all non-basic
     rebuildIsBasic();
 
+    // Initialize steepest-edge pricer with exact column norms for Phase I.
+    // With all-artificial basis, B^{-1} = diag(artSign), so gamma_j = ||a_j||^2.
+    m_se.initializeColumnNorms(m_nCols, m_nArtificials,
+                               m_colStart, m_rowIdx, m_values);
+
     // Factorize basis
     if (!refactorizeBasis())
         return LPStatus::INFEASIBLE;
@@ -400,6 +405,7 @@ LPStatus RevisedSimplex::phaseI()
                 if (m_basisIndices[i] >= m_nCols)
                     sumA += std::fabs(m_xB[i]);
             }
+
             if (sumA < m_params.feasibilityTol)
             {
                 // Save basis state before replacement attempt.
@@ -501,6 +507,21 @@ LPStatus RevisedSimplex::phaseI()
                         info.maxArt = av;
                 }
             }
+            // Steepest-edge weight stats for non-basic variables
+            int nTot = m_nCols + m_nArtificials;
+            int nNB = 0;
+            double sumW = 0.0;
+            for (int j = 0; j < nTot; ++j)
+            {
+                if (!m_isBasic[j])
+                {
+                    double w = m_se.weight(j);
+                    sumW += w;
+                    if (w > info.maxWeight) info.maxWeight = w;
+                    ++nNB;
+                }
+            }
+            if (nNB > 0) info.avgWeight = sumW / nNB;
             m_progressCallback(info);
         }
     }
@@ -515,6 +536,9 @@ LPStatus RevisedSimplex::phaseI()
 LPStatus RevisedSimplex::phaseII()
 {
     m_pricingStart = 0;
+
+    // Reset SE pricer for Phase II (different basis, different non-basic set)
+    m_se.reset(m_nCols + m_nArtificials);
 
     // Ensure workspace is allocated
     m_y.resize(m_nRows);
@@ -536,6 +560,20 @@ LPStatus RevisedSimplex::phaseII()
             info.iteration = iterCount;
             info.bestRC    = m_lastBestRC;
             info.pivotStep = m_lastPivotStep;
+            int nTot = m_nCols + m_nArtificials;
+            int nNB = 0;
+            double sumW = 0.0;
+            for (int j = 0; j < nTot; ++j)
+            {
+                if (!m_isBasic[j])
+                {
+                    double w = m_se.weight(j);
+                    sumW += w;
+                    if (w > info.maxWeight) info.maxWeight = w;
+                    ++nNB;
+                }
+            }
+            if (nNB > 0) info.avgWeight = sumW / nNB;
             m_progressCallback(info);
         }
     }
@@ -572,9 +610,10 @@ int RevisedSimplex::iterate(bool isPhaseI)
     }
     btran(m_y);
 
-    // Pricing: rotating partial Dantzig — scan a section of variables starting
-    // from m_pricingStart, pick the variable with the largest |reduced cost|.
+    // Pricing: exact steepest-edge.  Scan variables using rotating partial
+    // pricing, select the variable maximizing rc^2 / gamma_j.
     int enterCol = -1;
+    double bestScore = 0.0;
     double bestRC = 0.0;
     int sectionSize = std::max(nTotalCols / 4, 50);
     int scanned = 0;
@@ -623,10 +662,11 @@ int RevisedSimplex::iterate(bool isPhaseI)
 
         if (bCanEnter)
         {
-            double absRC = std::fabs(rc);
-            if (absRC > bestRC)
+            double sc = m_se.score(rc, j);
+            if (sc > bestScore)
             {
-                bestRC = absRC;
+                bestScore = sc;
+                bestRC = std::fabs(rc);
                 enterCol = j;
             }
         }
@@ -776,26 +816,85 @@ int RevisedSimplex::iterate(bool isPhaseI)
         assert(std::fabs(m_d[leaveRow]) > m_params.feasibilityTol &&
                "iterate: zero pivot element in leaving row");
 
+        // Steepest edge: compute rho = B^{-T} e_p and pi = B^{-T} d
+        // BEFORE the LU update, using the old basis factors.
+        m_rho.assign(m_nRows, 0.0);
+        m_rho[leaveRow] = 1.0;
+        btran(m_rho);
+
+        m_pi.resize(m_nRows);
+        for (int i = 0; i < m_nRows; ++i)
+            m_pi[i] = m_d[i];
+        btran(m_pi);
+
         // Update basis tracking
         m_isBasic[leaveCol] = false;
         m_basisIndices[leaveRow] = enterCol;
         m_isBasic[enterCol] = true;
 
+        bool bRefactored = false;
         if (!m_lu.update(leaveRow, m_d))
         {
             if (!refactorizeBasis())
                 return -1;  // signal numerical failure
+            bRefactored = true;
         }
         else
         {
             m_pivotsSinceRefactor++;
+            if (m_pivotsSinceRefactor >= m_params.refactorInterval)
+            {
+                if (!refactorizeBasis())
+                    return -1;  // signal numerical failure
+                recomputeXB();
+                bRefactored = true;
+            }
         }
 
-        if (m_pivotsSinceRefactor >= m_params.refactorInterval)
+        if (bRefactored)
         {
-            if (!refactorizeBasis())
-                return -1;  // signal numerical failure
-            recomputeXB();
+            // Recompute exact weights from scratch using fresh LU factors.
+            // This eliminates all numerical drift accumulated since the
+            // last refactorization.
+            m_se.recomputeExactWeights(m_lu, m_isBasic,
+                                       m_nCols, m_nArtificials,
+                                       m_colStart, m_rowIdx, m_values,
+                                       m_artSign, m_nRows);
+        }
+        else
+        {
+            // Incremental Goldfarb-Forrest update between refactorizations.
+            double dNormSq = 0.0;
+            for (int i = 0; i < m_nRows; ++i)
+                dNormSq += m_d[i] * m_d[i];
+
+            std::vector<double> alphas(nTotalCols, 0.0);
+            std::vector<double> taus(nTotalCols, 0.0);
+            for (int j = 0; j < nTotalCols; ++j)
+            {
+                if (m_isBasic[j])
+                    continue;
+                if (j < m_nCols)
+                {
+                    for (int p = m_colStart[j]; p < m_colStart[j + 1]; ++p)
+                    {
+                        alphas[j] += m_rho[m_rowIdx[p]] * m_values[p];
+                        taus[j]   += m_pi[m_rowIdx[p]]  * m_values[p];
+                    }
+                }
+                else
+                {
+                    int artRow = j - m_nCols;
+                    double sign = (!m_artSign.empty())
+                        ? static_cast<double>(m_artSign[artRow]) : 1.0;
+                    alphas[j] = m_rho[artRow] * sign;
+                    taus[j]   = m_pi[artRow]  * sign;
+                }
+            }
+
+            m_se.updateAfterPivot(enterCol, leaveCol,
+                                  m_d[leaveRow], dNormSq,
+                                  alphas, taus, m_isBasic, nTotalCols);
         }
     }
 

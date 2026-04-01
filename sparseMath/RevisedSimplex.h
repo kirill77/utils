@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils/sparseMath/SparseLU.h"
+#include "utils/sparseMath/SteepestEdgePricer.h"
 
 #include <vector>
 #include <cstddef>
@@ -33,6 +34,8 @@ struct ProgressInfo
     double maxArt    = 0.0; ///< Largest |artificial value| (Phase I only)
     double bestRC    = 0.0; ///< Largest |reduced cost| chosen by pricing
     double pivotStep = 0.0; ///< Step length from ratio test (0 = degenerate pivot)
+    double maxWeight = 0.0; ///< Largest Devex weight among non-basic variables
+    double avgWeight = 0.0; ///< Average Devex weight among non-basic variables
 };
 
 // Sparse LP solver: maximize c^T x  subject to  Ax = b,  lb <= x <= ub.
@@ -137,6 +140,11 @@ private:
     int m_pivotsSinceRefactor = 0;
     int m_pricingStart = 0;  // rotating start for partial Dantzig pricing
     ProgressCallback m_progressCallback;
+
+    // Exact steepest-edge pricer (Goldfarb-Forrest)
+    SteepestEdgePricer m_se;
+    std::vector<double> m_rho;   // pivot row workspace: B^{-T} e_p
+    std::vector<double> m_pi;    // SE workspace: B^{-T} d
 
     // Last-iterate diagnostics (populated by iterate() for the callback)
     double m_lastBestRC    = 0.0;

@@ -6,6 +6,7 @@
 #include "utils/sparseMath/SparseLU.h"
 #include "utils/sparseMath/AmdOrdering.h"
 #include "utils/sparseMath/RevisedSimplex.h"
+#include "utils/sparseMath/SteepestEdgePricer.h"
 #include "utils/log/ILog.h"
 
 #include <cassert>
@@ -885,6 +886,92 @@ static bool simplexTest_redundant_constraints()
     return true;
 }
 
+// =======================================================================
+// SteepestEdgePricer Tests (4)
+// =======================================================================
+
+static bool seTest_reset_and_score()
+{
+    const char* name = "SE:reset_and_score";
+    sparseMath::SteepestEdgePricer pricer;
+    pricer.reset(5);
+
+    for (int j = 0; j < 5; ++j)
+        VCHECK(std::fabs(pricer.weight(j) - 1.0) < 1e-15, name, "initial weight should be 1.0");
+
+    VCHECK(std::fabs(pricer.score(3.0, 0) - 9.0) < 1e-12, name, "score(3,w=1) should be 9");
+    VCHECK(std::fabs(pricer.score(-2.0, 1) - 4.0) < 1e-12, name, "score(-2,w=1) should be 4");
+    return true;
+}
+
+static bool seTest_column_norms()
+{
+    const char* name = "SE:column_norms";
+    // 2 rows, 3 columns: A = [[1,2,0],[0,3,4]]
+    std::vector<int> colStart = {0, 1, 3, 4};
+    std::vector<int> rowIdx = {0, 0, 1, 1};
+    std::vector<double> values = {1.0, 2.0, 3.0, 4.0};
+
+    sparseMath::SteepestEdgePricer pricer;
+    pricer.initializeColumnNorms(3, 2, colStart, rowIdx, values);
+
+    // col 0: ||[1,0]||^2 = 1
+    VCHECK(std::fabs(pricer.weight(0) - 1.0) < 1e-12, name, "col 0 norm wrong");
+    // col 1: ||[2,3]||^2 = 13
+    VCHECK(std::fabs(pricer.weight(1) - 13.0) < 1e-12, name, "col 1 norm wrong");
+    // col 2: ||[0,4]||^2 = 16
+    VCHECK(std::fabs(pricer.weight(2) - 16.0) < 1e-12, name, "col 2 norm wrong");
+    // artificials: 1.0
+    VCHECK(std::fabs(pricer.weight(3) - 1.0) < 1e-12, name, "art 0 weight wrong");
+    VCHECK(std::fabs(pricer.weight(4) - 1.0) < 1e-12, name, "art 1 weight wrong");
+    return true;
+}
+
+static bool seTest_leaving_weight()
+{
+    const char* name = "SE:leaving_weight";
+    sparseMath::SteepestEdgePricer pricer;
+    pricer.reset(5);
+
+    // d_p = 2.0, ||d||^2 = 5.0
+    // w_l = (1 + 5 - 4) / 4 = 0.5
+    std::vector<double> alphas(5, 0.0);
+    std::vector<double> taus(5, 0.0);
+    std::vector<bool> isBasic = {true, false, false, false, false};
+    pricer.updateAfterPivot(0, 3, 2.0, 5.0, alphas, taus, isBasic, 5);
+
+    VCHECK(std::fabs(pricer.weight(3) - 0.5) < 1e-12, name,
+           "leaving weight should be (1+||d||^2-d_p^2)/d_p^2");
+    return true;
+}
+
+static bool seTest_exact_update()
+{
+    const char* name = "SE:exact_update";
+    // Verify the Goldfarb-Forrest formula:
+    //   gamma_j = gamma_j - 2*(alpha/d_p)*(tau - alpha) + (alpha/d_p)^2 * sigma
+    //   sigma = ||d||^2 - 2*d_p + 1
+    sparseMath::SteepestEdgePricer pricer;
+    pricer.reset(4);
+
+    // enterCol=0, leaveCol=3, d_p=2.0, ||d||^2=10.0
+    // sigma = 10 - 4 + 1 = 7
+    // Non-basic col 1: alpha=1.0, tau=3.0, gamma_old=1.0
+    //   gamma_new = 1.0 - 2*(0.5)*(3-1) + 0.25*7 = 1 - 2 + 1.75 = 0.75
+    // Non-basic col 2: alpha=0.0, tau=0.0
+    //   gamma_new = 1.0 - 0 + 0 = 1.0  (unaffected)
+    std::vector<double> alphas = {0, 1.0, 0.0, 0};
+    std::vector<double> taus   = {0, 3.0, 0.0, 0};
+    std::vector<bool> isBasic  = {true, false, false, false};
+    pricer.updateAfterPivot(0, 3, 2.0, 10.0, alphas, taus, isBasic, 4);
+
+    VCHECK(std::fabs(pricer.weight(1) - 0.75) < 1e-12, name,
+           "col 1 exact SE update wrong");
+    VCHECK(std::fabs(pricer.weight(2) - 1.0) < 1e-12, name,
+           "col 2 should be unaffected (alpha=0)");
+    return true;
+}
+
 #undef VCHECK
 
 } // anonymous namespace
@@ -900,7 +987,7 @@ bool sparseMath::runValidation()
         return true;
     s_alreadyRun = true;
 
-    LOG_INFO("SparseMath: running solver validation (25 tests)...");
+    LOG_INFO("SparseMath: running solver validation (29 tests)...");  // 14 LU + 11 Simplex + 4 SE
 
     struct TestEntry { bool (*fn)(); const char* name; };
     TestEntry tests[] = {
@@ -931,6 +1018,11 @@ bool sparseMath::runValidation()
         { simplexTest_warm_start_knockout,    "Simplex:warm_start_knockout" },
         { simplexTest_iteration_limit,        "Simplex:iteration_limit" },
         { simplexTest_redundant_constraints,  "Simplex:redundant_constraints" },
+        // SteepestEdgePricer (4)
+        { seTest_reset_and_score,             "SE:reset_and_score" },
+        { seTest_column_norms,                "SE:column_norms" },
+        { seTest_leaving_weight,              "SE:leaving_weight" },
+        { seTest_exact_update,                "SE:exact_update" },
     };
 
     int total = static_cast<int>(std::size(tests));
