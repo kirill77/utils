@@ -83,12 +83,12 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
     // Coefficient of variation
     outMetrics.coefficientOfVariation = (mean > 0.0) ? (outMetrics.stddevMs / mean) : 0.0;
 
-    // Jitter: average absolute difference between consecutive intervals
+    // Jitter: average relative difference between consecutive intervals (%)
     double jitterSum = 0.0;
     for (size_t i = 1; i < intervals.size(); ++i) {
-        jitterSum += std::abs(intervals[i] - intervals[i - 1]);
+        jitterSum += std::abs(intervals[i] - intervals[i - 1]) / intervals[i - 1] * 100.0;
     }
-    outMetrics.jitterMs = jitterSum / static_cast<double>(intervals.size() - 1);
+    outMetrics.jitterPct = jitterSum / static_cast<double>(intervals.size() - 1);
 
     return true;
 }
