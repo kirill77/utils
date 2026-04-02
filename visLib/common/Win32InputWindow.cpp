@@ -126,6 +126,11 @@ bool Win32InputWindow::createWindow(const Win32WindowConfig& config)
     }
 
     ShowWindow(m_hwnd, SW_SHOW);
+
+    // Flash topmost on then off to force the window above all others
+    SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    SetWindowPos(m_hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+
     return true;
 }
 
