@@ -78,6 +78,8 @@ LPResult RevisedSimplex::solve()
 
     LPResult result;
 
+    m_bDantzigMode = !m_params.bUseSteepestEdge;
+
     LPStatus status = phaseI();
     if (status == LPStatus::INFEASIBLE)
     {
@@ -257,10 +259,17 @@ LPStatus RevisedSimplex::phaseI()
     // Build isBasic: original vars are all non-basic
     rebuildIsBasic();
 
-    // Initialize steepest-edge pricer with exact column norms for Phase I.
-    // With all-artificial basis, B^{-1} = diag(artSign), so gamma_j = ||a_j||^2.
-    m_se.initializeColumnNorms(m_nCols, m_nArtificials,
-                               m_colStart, m_rowIdx, m_values);
+    // Initialize steepest-edge pricer for Phase I.
+    if (m_bDantzigMode)
+    {
+        m_se.reset(m_nCols + m_nArtificials);
+    }
+    else
+    {
+        // With all-artificial basis, B^{-1} = diag(artSign), so gamma_j = ||a_j||^2.
+        m_se.initializeColumnNorms(m_nCols, m_nArtificials,
+                                   m_colStart, m_rowIdx, m_values);
+    }
 
     // Factorize basis
     if (!refactorizeBasis())
@@ -601,7 +610,7 @@ int RevisedSimplex::iterate(bool isPhaseI)
 
         if (bCanEnter)
         {
-            double sc = m_se.score(rc, j);
+            double sc = m_bDantzigMode ? std::fabs(rc) : m_se.score(rc, j);
             if (sc > bestScore)
             {
                 bestScore = sc;
@@ -757,14 +766,18 @@ int RevisedSimplex::iterate(bool isPhaseI)
 
         // Steepest edge: compute rho = B^{-T} e_p and pi = B^{-T} d
         // BEFORE the LU update, using the old basis factors.
-        m_rho.assign(m_nRows, 0.0);
-        m_rho[leaveRow] = 1.0;
-        btran(m_rho);
+        // Skip in Dantzig mode — weights are all 1.0 and never updated.
+        if (!m_bDantzigMode)
+        {
+            m_rho.assign(m_nRows, 0.0);
+            m_rho[leaveRow] = 1.0;
+            btran(m_rho);
 
-        m_pi.resize(m_nRows);
-        for (int i = 0; i < m_nRows; ++i)
-            m_pi[i] = m_d[i];
-        btran(m_pi);
+            m_pi.resize(m_nRows);
+            for (int i = 0; i < m_nRows; ++i)
+                m_pi[i] = m_d[i];
+            btran(m_pi);
+        }
 
         // Update basis tracking
         m_isBasic[leaveCol] = false;
@@ -790,7 +803,13 @@ int RevisedSimplex::iterate(bool isPhaseI)
             }
         }
 
-        if (bRefactored)
+        if (m_bDantzigMode)
+        {
+            // Dantzig mode: weights stay at 1.0, just reset on refactorization.
+            if (bRefactored)
+                m_se.reset(nTotalCols);
+        }
+        else if (bRefactored)
         {
             // Recompute exact weights from scratch using fresh LU factors.
             // This eliminates all numerical drift accumulated since the

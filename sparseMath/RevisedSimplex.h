@@ -53,6 +53,7 @@ public:
         int    maxIterations     = 100000;
         int    refactorInterval  = 50;
         int    progressInterval  = 100;  ///< Call progress callback every N iterations (0 = never)
+        bool   bUseSteepestEdge = true; ///< Use steepest-edge pricing in Phase I (false = Dantzig)
     };
 
     using ProgressCallback = std::function<void(const ProgressInfo& info)>;
@@ -151,6 +152,10 @@ private:
     SteepestEdgePricer m_se;
     std::vector<double> m_rho;   // pivot row workspace: B^{-T} e_p
     std::vector<double> m_pi;    // SE workspace: B^{-T} d
+
+    // Pricing mode: true = Dantzig (|rc|), false = steepest-edge (rc^2/gamma).
+    // Set from Params::bUseSteepestEdge at solve() start; forced true for Phase II.
+    bool m_bDantzigMode = false;
 
     // Last-iterate diagnostics (populated by iterate() for the callback)
     double m_lastBestRC    = 0.0;
