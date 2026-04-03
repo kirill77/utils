@@ -79,6 +79,7 @@ bool StringMap::save(const std::string& path) const
     std::ofstream file(path);
     if (!file.is_open()) return false;
 
+    file << "// Written by StringMap\n";
     for (const auto& [key, value] : m_data) {
         file << key << '=' << escapeValue(value) << '\n';
     }
@@ -93,6 +94,12 @@ StringMap StringMap::load(const std::string& path)
 
     std::string line;
     while (std::getline(file, line)) {
+        if (line.empty()) continue;
+        // Strip // comments
+        auto commentPos = line.find("//");
+        if (commentPos != std::string::npos) {
+            line = line.substr(0, commentPos);
+        }
         if (line.empty()) continue;
         auto eq = line.find('=');
         if (eq == std::string::npos) continue;
