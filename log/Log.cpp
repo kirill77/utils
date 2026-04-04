@@ -146,6 +146,28 @@ struct MyLog : public ILog
     {
     }
 
+    virtual std::string getLogPath() const override
+    {
+        return m_sLogPath;
+    }
+
+    virtual void switchLogPath(const std::string& newPath) override
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        bool bNewFile = !std::filesystem::exists(newPath);
+        m_sLogPath = newPath;
+        if (bNewFile)
+        {
+            // Create the new log file only if it doesn't already exist
+            FILE* pFile = nullptr;
+            fopen_s(&pFile, m_sLogPath.c_str(), "wt");
+            if (pFile)
+            {
+                fclose(pFile);
+            }
+        }
+    }
+
     // Observer pattern implementation
     virtual void addObserver(std::shared_ptr<ILogObserver> pObserver) override
     {

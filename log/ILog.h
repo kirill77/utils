@@ -32,6 +32,10 @@ struct ILog
     virtual void logva(LogLevel level, const char* sFile, unsigned uLine, const char* func, const char* fmt, ...) = 0;
     virtual void shutdown() = 0;
 
+    // Log path switching
+    virtual std::string getLogPath() const = 0;
+    virtual void switchLogPath(const std::string& newPath) = 0;
+
     // Log level filtering
     virtual void setLogLevel(LogLevel minLevel) = 0;
     virtual LogLevel getLogLevel() const = 0;
