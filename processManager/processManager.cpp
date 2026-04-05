@@ -28,6 +28,13 @@ static std::string WStringToString(const std::wstring& wstr) {
     return str;
 }
 
+ProcessManager::ProcessInfo::ProcessInfo(uint32_t processId, const std::string& name, void* rawHandle)
+    : id(processId)
+    , imageName(name)
+    , handle(rawHandle, [](void* h) { if (h) CloseHandle(static_cast<HANDLE>(h)); })
+{
+}
+
 ProcessManager::ProcessInfo ProcessManager::findProcessWithImage(const std::string& sName) {
     HANDLE hProcessSnap;
     PROCESSENTRY32 pe32;
@@ -166,16 +173,14 @@ ProcessManager::ProcessInfo ProcessManager::startProcess(const std::string& sFul
         imageName = imageName.substr(imageNameSlash + 1);
     }
 
-    ProcessInfo processInfo(pi.dwProcessId, imageName);
-    
+    ProcessInfo processInfo(pi.dwProcessId, imageName, pi.hProcess);
+
     LOG_INFO("Successfully started process: %s", sFullPath.c_str());
     LOG_INFO("Process ID: %u", processInfo.id);
     LOG_INFO("Image Name: %s", processInfo.imageName.c_str());
     LOG_INFO("Working Directory: %s", workingDir.empty() ? "(current directory)" : workingDir.c_str());
     LOG_INFO("Thread ID: %lu", pi.dwThreadId);
 
-    // Close process and thread handles as we don't need to wait for the process
-    CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
     return processInfo;
@@ -222,7 +227,6 @@ ProcessManager::ProcessInfo ProcessManager::startProcessElevated(const std::stri
     DWORD processId = 0;
     if (sei.hProcess != nullptr) {
         processId = GetProcessId(sei.hProcess);
-        CloseHandle(sei.hProcess);  // Close handle as we don't need it anymore
     }
     
     if (processId == 0) {
@@ -236,8 +240,8 @@ ProcessManager::ProcessInfo ProcessManager::startProcessElevated(const std::stri
         imageName = imageName.substr(imageNameSlash + 1);
     }
 
-    ProcessInfo processInfo(processId, imageName);
-    
+    ProcessInfo processInfo(processId, imageName, sei.hProcess);
+
     LOG_INFO("Successfully started elevated process: %s", sFullPath.c_str());
     LOG_INFO("Process ID: %u", processInfo.id);
     LOG_INFO("Image Name: %s", processInfo.imageName.c_str());
@@ -270,6 +274,37 @@ bool ProcessManager::isProcessRunning(const ProcessInfo& processInfo) {
 
     // If exit code is STILL_ACTIVE, the process is still running
     return (exitCode == STILL_ACTIVE);
+}
+
+uint32_t ProcessManager::getExitCode(const ProcessInfo& processInfo) {
+    if (!processInfo.isValid()) {
+        return UINT32_MAX;
+    }
+
+    // Use stored handle if available, otherwise open by PID
+    HANDLE hProcess = nullptr;
+    bool ownedHandle = false;
+    if (processInfo.handle) {
+        hProcess = static_cast<HANDLE>(processInfo.handle.get());
+    } else {
+        hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processInfo.id);
+        if (hProcess == NULL) {
+            return UINT32_MAX;
+        }
+        ownedHandle = true;
+    }
+
+    DWORD exitCode;
+    BOOL result = GetExitCodeProcess(hProcess, &exitCode);
+    if (ownedHandle) {
+        CloseHandle(hProcess);
+    }
+
+    if (!result) {
+        return UINT32_MAX;
+    }
+
+    return static_cast<uint32_t>(exitCode);
 }
 
 std::vector<ProcessManager::ProcessInfo> ProcessManager::findAllProcessesWithImage(const std::string& sName) {

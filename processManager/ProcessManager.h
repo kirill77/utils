@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <memory>
 #include <vector>
 
 class ProcessManager
@@ -9,10 +10,12 @@ public:
     struct ProcessInfo {
         uint32_t id;
         std::string imageName;
-        
+        std::shared_ptr<void> handle;  // Process handle (shared ownership, CloseHandle on last release)
+
         ProcessInfo() : id(0) {}
         ProcessInfo(uint32_t processId, const std::string& name) : id(processId), imageName(name) {}
-        
+        ProcessInfo(uint32_t processId, const std::string& name, void* rawHandle);
+
         bool isValid() const { return id != 0; }
     };
 
@@ -40,6 +43,9 @@ public:
     
     // checks if a process is still running
     bool isProcessRunning(const ProcessInfo& processInfo);
+
+    // returns the exit code of a terminated process (UINT32_MAX on failure)
+    uint32_t getExitCode(const ProcessInfo& processInfo);
 
     // finds the main visible window belonging to a process
     WindowInfo findMainWindow(uint32_t processId);
