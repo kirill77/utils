@@ -11,7 +11,7 @@ class D3D12Queue
 {
 public:
     D3D12Queue(Microsoft::WRL::ComPtr<ID3D12Device> device);
-    ~D3D12Queue() = default;
+    ~D3D12Queue();
 
     // Command list recording
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> beginRecording();
@@ -27,8 +27,13 @@ public:
 private:
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_commandQueue;
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_commandAllocator;
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_commandAllocators[2];
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_commandList;
+    Microsoft::WRL::ComPtr<ID3D12Fence> m_fence;
+    HANDLE m_fenceEvent = nullptr;
+    uint64_t m_fenceValues[2] = {};
+    uint64_t m_nextFenceValue = 1;
+    int m_currentAllocator = 0;
 };
 
 } // namespace visLib
