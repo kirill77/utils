@@ -239,13 +239,17 @@ void D3D12Renderer::initializeRenderResources()
     const UINT transformBufferSize = (sizeof(TransformBuffer) + 255) & ~255;
     m_pTransformBuffer = CreateBuffer(pDevice, transformBufferSize,
                                       D3D12_RESOURCE_FLAG_NONE,
-                                      D3D12_RESOURCE_STATE_GENERIC_READ);
+                                      D3D12_RESOURCE_STATE_GENERIC_READ,
+                                      CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+                                      L"visLib::TransformCB");
 
     // Create pixel params constant buffer (b1) - available for any shader that needs it
     const UINT pixelParamsBufferSize = (sizeof(PixelParamsBuffer) + 255) & ~255;
     m_pPixelParamsBuffer = CreateBuffer(pDevice, pixelParamsBufferSize,
                                         D3D12_RESOURCE_FLAG_NONE,
-                                        D3D12_RESOURCE_STATE_GENERIC_READ);
+                                        D3D12_RESOURCE_STATE_GENERIC_READ,
+                                        CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+                                        L"visLib::PixelParamsCB");
 
     // Initialize pixel params with iteration count and QR code data
     PixelParamsBuffer pixelParams = {};

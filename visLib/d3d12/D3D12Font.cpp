@@ -144,6 +144,7 @@ D3D12Font::D3D12Font(uint32_t fontSize, D3D12Queue* pQueue, DXGI_FORMAT rtvForma
         D3D12_RESOURCE_STATE_COPY_DEST,
         nullptr,
         IID_PPV_ARGS(&m_fontTexture)));
+    m_fontTexture->SetName(L"visLib::FontAtlas");
 
     // Upload the atlas data
     const UINT imageSize = ATLAS_WIDTH * ATLAS_HEIGHT * 4;
@@ -159,6 +160,7 @@ D3D12Font::D3D12Font(uint32_t fontSize, D3D12Queue* pQueue, DXGI_FORMAT rtvForma
         D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr,
         IID_PPV_ARGS(&uploadBuffer)));
+    uploadBuffer->SetName(L"visLib::FontUploadBuffer");
 
     // Get command list from queue
     auto commandList = pQueue->beginRecording();

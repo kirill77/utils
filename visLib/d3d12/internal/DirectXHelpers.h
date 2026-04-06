@@ -52,7 +52,8 @@ inline Microsoft::WRL::ComPtr<ID3D12Resource> CreateBuffer(
     uint32_t size,
     D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE,
     D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_GENERIC_READ,
-    const D3D12_HEAP_PROPERTIES& heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD))
+    const D3D12_HEAP_PROPERTIES& heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+    const wchar_t* name = nullptr)
 {
     D3D12_RESOURCE_DESC bufferDesc = {};
     bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -75,6 +76,7 @@ inline Microsoft::WRL::ComPtr<ID3D12Resource> CreateBuffer(
         initialState,
         nullptr,
         IID_PPV_ARGS(&buffer)));
+    if (name) buffer->SetName(name);
 
     return buffer;
 }

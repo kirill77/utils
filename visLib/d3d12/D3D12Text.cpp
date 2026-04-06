@@ -214,7 +214,9 @@ void D3D12Text::updateVertexBuffer(
     {
         m_vertexBuffer = CreateBuffer(pDevice, vertexBufferSize,
                                       D3D12_RESOURCE_FLAG_NONE,
-                                      D3D12_RESOURCE_STATE_GENERIC_READ);
+                                      D3D12_RESOURCE_STATE_GENERIC_READ,
+                                      CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+                                      L"visLib::TextVertexBuffer");
         
         m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
         m_vertexBufferView.StrideInBytes = sizeof(TextVertex);
@@ -227,7 +229,9 @@ void D3D12Text::updateVertexBuffer(
     {
         m_indexBuffer = CreateBuffer(pDevice, indexBufferSize,
                                      D3D12_RESOURCE_FLAG_NONE,
-                                     D3D12_RESOURCE_STATE_GENERIC_READ);
+                                     D3D12_RESOURCE_STATE_GENERIC_READ,
+                                     CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+                                     L"visLib::TextIndexBuffer");
         
         m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
         m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
@@ -251,7 +255,9 @@ void D3D12Text::updateConstantBuffer(const float2& screenSize, ID3D12Device* pDe
         
         m_constantBuffer = CreateBuffer(pDevice, constantBufferSize,
                                         D3D12_RESOURCE_FLAG_NONE,
-                                        D3D12_RESOURCE_STATE_GENERIC_READ);
+                                        D3D12_RESOURCE_STATE_GENERIC_READ,
+                                        CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+                                        L"visLib::TextConstantBuffer");
         
         CD3DX12_RANGE readRange(0, 0);
         ThrowIfFailed(m_constantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&m_constantBufferData)));

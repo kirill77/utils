@@ -48,6 +48,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> D3D12Mesh::createOrUpdateUploadBuffer(
             D3D12_RESOURCE_STATE_GENERIC_READ,
             nullptr,
             IID_PPV_ARGS(uploadBuffer.GetAddressOf())));
+        uploadBuffer->SetName(L"visLib::MeshUploadBuffer");
     }
 
     // Map and copy data directly

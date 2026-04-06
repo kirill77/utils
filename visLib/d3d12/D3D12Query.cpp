@@ -49,6 +49,7 @@ D3D12Query::D3D12Query(ID3D12Device* pDevice, ID3D12CommandQueue* pQueue,
             D3D12_RESOURCE_STATE_COPY_DEST,
             nullptr,
             IID_PPV_ARGS(&m_pTimestampReadback)));
+        m_pTimestampReadback->SetName(L"visLib::TimestampReadback");
 
         // Map and initialize to 0 (sentinel - timestamps are never 0)
         ThrowIfFailed(m_pTimestampReadback->Map(0, nullptr, reinterpret_cast<void**>(&m_pTimestampBuffer)));
@@ -87,6 +88,7 @@ D3D12Query::D3D12Query(ID3D12Device* pDevice, ID3D12CommandQueue* pQueue,
             D3D12_RESOURCE_STATE_COPY_DEST,
             nullptr,
             IID_PPV_ARGS(&m_pPipelineStatsReadback)));
+        m_pPipelineStatsReadback->SetName(L"visLib::PipelineStatsReadback");
 
         // Map and initialize to 0xFF (sentinel - UINT64_MAX)
         ThrowIfFailed(m_pPipelineStatsReadback->Map(0, nullptr, reinterpret_cast<void**>(&m_pPipelineStatsBuffer)));

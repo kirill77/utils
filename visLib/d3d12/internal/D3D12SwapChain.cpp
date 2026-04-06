@@ -223,6 +223,7 @@ void D3D12SwapChain::createDepthBuffer()
         IID_PPV_ARGS(&m_pDepthBuffer)
     );
     if (FAILED(hr)) throw std::runtime_error("Failed to create depth buffer");
+    m_pDepthBuffer->SetName(L"visLib::DepthBuffer");
 
     // Create DSV
     D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};

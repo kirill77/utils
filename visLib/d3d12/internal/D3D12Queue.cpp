@@ -15,19 +15,24 @@ D3D12Queue::D3D12Queue(Microsoft::WRL::ComPtr<ID3D12Device> device)
     queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 
     ThrowIfFailed(device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_commandQueue)));
+    m_commandQueue->SetName(L"visLib::D3D12Queue");
 
     // Create two command allocators for ping-pong double buffering
     ThrowIfFailed(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocators[0])));
+    m_commandAllocators[0]->SetName(L"visLib::CmdAllocator[0]");
     ThrowIfFailed(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocators[1])));
+    m_commandAllocators[1]->SetName(L"visLib::CmdAllocator[1]");
 
     // Create command list
     ThrowIfFailed(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[0].Get(), nullptr, IID_PPV_ARGS(&m_commandList)));
+    m_commandList->SetName(L"visLib::CmdList");
 
     // Close the command list to prepare it for first use
     ThrowIfFailed(m_commandList->Close());
 
     // Create persistent fence and event for synchronization
     ThrowIfFailed(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)));
+    m_fence->SetName(L"visLib::Fence");
     m_fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     if (m_fenceEvent == nullptr)
     {
