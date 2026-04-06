@@ -537,7 +537,7 @@ void D3D12Renderer::present()
     m_frameIndex++;
 }
 
-void D3D12Renderer::waitForGPU()
+void D3D12Renderer::flush()
 {
     auto pSwapChain = m_pWindow->getOrCreateSwapChain();
     if (pSwapChain)

@@ -86,7 +86,7 @@ public:
     virtual void present() = 0;
 
     // Wait for GPU to finish all pending work
-    virtual void waitForGPU() = 0;
+    virtual void flush() = 0;
 
     // ===== Configuration =====
 

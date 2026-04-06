@@ -55,7 +55,7 @@ public:
     // Rendering
     box3 render(IQuery* query = nullptr) override;
     void present() override;
-    void waitForGPU() override;
+    void flush() override;
 
     // Configuration
     const RendererConfig& getConfig() const override { return m_config; }

@@ -30,7 +30,7 @@ OpenXRRenderer::OpenXRRenderer(OpenXRWindow* pWindow, const RendererConfig& conf
 
 OpenXRRenderer::~OpenXRRenderer()
 {
-    waitForGPU();
+    flush();
 
     if (m_fenceEvent) {
         CloseHandle(m_fenceEvent);
@@ -617,7 +617,7 @@ void OpenXRRenderer::present()
     m_frameIndex++;
 }
 
-void OpenXRRenderer::waitForGPU()
+void OpenXRRenderer::flush()
 {
     if (!m_pFence || !m_pWindow->getCommandQueue()) return;
 
