@@ -90,6 +90,11 @@ D3D12SwapChain::~D3D12SwapChain()
 {
     if (m_pQueue)
     {
+        // Present() queues DXGI-internal operations on the command queue after
+        // our fence signal. Submit empty work and wait again — since command
+        // queues are FIFO, this ensures DXGI presentation work is also complete.
+        auto cmdList = m_pQueue->beginRecording();
+        m_pQueue->execute(cmdList);
         m_pQueue->flush();
     }
 }
