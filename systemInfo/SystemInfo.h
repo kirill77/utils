@@ -28,6 +28,16 @@ struct CpuInfo {
 };
 
 /**
+ * @struct DisplayMode
+ * @brief A display mode supported by a monitor (resolution + refresh rate)
+ */
+struct DisplayMode {
+    uint32_t width = 0;
+    uint32_t height = 0;
+    uint32_t refreshRateHz = 0;
+};
+
+/**
  * @struct MonitorInfo
  * @brief Information about a monitor connected to the system
  */
@@ -36,8 +46,9 @@ struct MonitorInfo {
     std::wstring deviceName;        ///< Device name (e.g., "\\\\.\\DISPLAY1")
     uint32_t widthPixels = 0;       ///< Horizontal resolution in pixels
     uint32_t heightPixels = 0;      ///< Vertical resolution in pixels
-    uint32_t refreshRateHz = 0;     ///< Refresh rate in Hz
+    uint32_t refreshRateHz = 0;     ///< Current refresh rate in Hz
     bool bIsPrimary = false;        ///< True if this is the primary monitor
+    std::vector<DisplayMode> supportedModes;  ///< All display modes reported by the OS
 };
 
 /**

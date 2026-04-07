@@ -265,6 +265,28 @@ BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC /*hdcMonitor*/,
             info.refreshRateHz = devMode.dmDisplayFrequency;
         }
 
+        // Enumerate all supported display modes for this monitor
+        DEVMODEW enumMode = {};
+        enumMode.dmSize = sizeof(enumMode);
+        for (DWORD i = 0; EnumDisplaySettingsW(monitorInfoEx.szDevice, i, &enumMode); ++i) {
+            DisplayMode dm;
+            dm.width = enumMode.dmPelsWidth;
+            dm.height = enumMode.dmPelsHeight;
+            dm.refreshRateHz = enumMode.dmDisplayFrequency;
+            // Deduplicate — modes can differ only by color depth
+            bool dup = false;
+            for (const auto& existing : info.supportedModes) {
+                if (existing.width == dm.width && existing.height == dm.height
+                    && existing.refreshRateHz == dm.refreshRateHz) {
+                    dup = true;
+                    break;
+                }
+            }
+            if (!dup) {
+                info.supportedModes.push_back(dm);
+            }
+        }
+
         // Try to get friendly monitor name from display devices
         DISPLAY_DEVICEW displayDevice;
         displayDevice.cb = sizeof(displayDevice);
@@ -376,6 +398,18 @@ std::string SystemInfo::toCSV() const {
             << (monitor.bIsPrimary ? 1 : 0) << "\n";
     }
 
+    // Supported display modes (per-monitor, for test permutation filtering)
+    oss << "\n[MonitorModes]\n";
+    oss << "DeviceName,Width,Height,RefreshHz\n";
+    for (const auto& monitor : monitors) {
+        for (const auto& mode : monitor.supportedModes) {
+            oss << escapeCSV(wstringToUtf8(monitor.deviceName)) << ","
+                << mode.width << ","
+                << mode.height << ","
+                << mode.refreshRateHz << "\n";
+        }
+    }
+
     return oss.str();
 }
 
@@ -384,7 +418,7 @@ SystemInfo SystemInfo::fromCSV(const std::string& csvData) {
     std::istringstream iss(csvData);
     std::string line;
     
-    enum class Section { None, Machine, GPU, CPU, Monitor };
+    enum class Section { None, Machine, GPU, CPU, Monitor, MonitorModes };
     Section currentSection = Section::None;
     bool headerSkipped = false;
 
@@ -410,6 +444,10 @@ SystemInfo SystemInfo::fromCSV(const std::string& csvData) {
             continue;
         } else if (line == "[Monitor]") {
             currentSection = Section::Monitor;
+            headerSkipped = false;
+            continue;
+        } else if (line == "[MonitorModes]") {
+            currentSection = Section::MonitorModes;
             headerSkipped = false;
             continue;
         }
@@ -459,6 +497,23 @@ SystemInfo SystemInfo::fromCSV(const std::string& csvData) {
                 monitor.refreshRateHz = static_cast<uint32_t>(std::stoul(fields[4]));
                 monitor.bIsPrimary = (fields[5] == "1");
                 info.monitors.push_back(monitor);
+            }
+            break;
+
+        case Section::MonitorModes:
+            if (fields.size() >= 4) {
+                std::wstring devName = utf8ToWstring(fields[0]);
+                DisplayMode dm;
+                dm.width = static_cast<uint32_t>(std::stoul(fields[1]));
+                dm.height = static_cast<uint32_t>(std::stoul(fields[2]));
+                dm.refreshRateHz = static_cast<uint32_t>(std::stoul(fields[3]));
+                // Append to the matching monitor
+                for (auto& monitor : info.monitors) {
+                    if (monitor.deviceName == devName) {
+                        monitor.supportedModes.push_back(dm);
+                        break;
+                    }
+                }
             }
             break;
 
