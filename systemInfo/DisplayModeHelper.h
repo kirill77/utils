@@ -32,6 +32,10 @@ public:
         if (!EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS, &devMode)) {
             return false;
         }
+        // Skip if already at the requested frequency
+        if (devMode.dmDisplayFrequency == refreshRateHz) {
+            return true;
+        }
         devMode.dmDisplayFrequency = refreshRateHz;
         devMode.dmFields = DM_DISPLAYFREQUENCY;
         LONG result = ChangeDisplaySettingsW(&devMode, CDS_FULLSCREEN);
