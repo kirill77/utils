@@ -13,7 +13,7 @@
  */
 class DisplayModeGuard {
 public:
-    ~DisplayModeGuard() { restore(); }
+    ~DisplayModeGuard() = default;
 
     DisplayModeGuard() = default;
     DisplayModeGuard(const DisplayModeGuard&) = delete;
