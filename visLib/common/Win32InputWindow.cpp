@@ -85,7 +85,7 @@ bool Win32InputWindow::createWindow(const Win32WindowConfig& config)
 
     // Determine window style
     // Exclusive fullscreen and borderless fullscreen both use WS_POPUP
-    bool isBorderless = config.fullDesktop || config.exclusiveFullscreen;
+    bool isBorderless = config.borderless || config.fullDesktop || config.exclusiveFullscreen;
     DWORD windowStyle = isBorderless ? WS_POPUP : WS_OVERLAPPEDWINDOW;
     if (!config.resizable && !isBorderless) {
         windowStyle &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
@@ -257,6 +257,12 @@ LRESULT CALLBACK Win32InputWindow::WindowProc(HWND hwnd, UINT message, WPARAM wP
         {
             case WM_DESTROY:
                 window->m_closeRequested = true;
+                return 0;
+
+            case WM_ACTIVATE:
+                if (LOWORD(wParam) == WA_INACTIVE) {
+                    window->m_focusLost = true;
+                }
                 return 0;
 
             case WM_SIZE:

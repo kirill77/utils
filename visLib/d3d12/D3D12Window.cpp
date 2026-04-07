@@ -16,6 +16,7 @@ D3D12Window::D3D12Window(const WindowConfig& config)
     winConfig.width = config.width;
     winConfig.height = config.height;
     winConfig.resizable = config.resizable;
+    winConfig.borderless = config.borderless;
     winConfig.fullDesktop = config.fullDesktop;
     winConfig.exclusiveFullscreen = config.exclusiveFullscreen;
 
@@ -76,6 +77,16 @@ void D3D12Window::processEvents()
 const InputState& D3D12Window::getInputState() const
 {
     return m_window->getInputState();
+}
+
+bool D3D12Window::wasFocusLost() const
+{
+    return m_window->wasFocusLost();
+}
+
+void D3D12Window::resetFocusLost()
+{
+    m_window->resetFocusLost();
 }
 
 void* D3D12Window::getNativeHandle() const

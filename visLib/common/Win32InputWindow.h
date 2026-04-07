@@ -17,6 +17,7 @@ struct Win32WindowConfig {
     uint32_t width = 1280;
     uint32_t height = 720;
     bool resizable = true;
+    bool borderless = false;          // Use WS_POPUP (no title bar / borders) at the given width x height
     bool fullDesktop = false;         // Borderless fullscreen at desktop resolution (-fullDesktop)
     bool exclusiveFullscreen = false; // Exclusive fullscreen (changes display resolution)
 };
@@ -39,6 +40,10 @@ public:
 
     // Check if close was requested (WM_DESTROY received)
     bool isCloseRequested() const { return m_closeRequested; }
+
+    // Focus-loss tracking (set by WM_ACTIVATE when window loses focus)
+    bool wasFocusLost() const { return m_focusLost; }
+    void resetFocusLost() { m_focusLost = false; }
 
     // Process pending window messages (call once per frame)
     void processMessages();
@@ -75,6 +80,7 @@ private:
     uint32_t m_width = 0;
     uint32_t m_height = 0;
     bool m_closeRequested = false;
+    bool m_focusLost = false;
 
     std::unique_ptr<Win32InputState> m_inputState;
 

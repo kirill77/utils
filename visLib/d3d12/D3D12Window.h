@@ -25,6 +25,8 @@ public:
     void resize(uint32_t width, uint32_t height) override;
     void processEvents() override;
     const InputState& getInputState() const override;
+    bool wasFocusLost() const override;
+    void resetFocusLost() override;
     void* getNativeHandle() const override;
 
     // D3D12-specific accessors (used by D3D12Renderer)

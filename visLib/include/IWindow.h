@@ -34,8 +34,9 @@ struct WindowConfig {
     std::string title = "visLib Window";
     uint32_t width = 2560;
     uint32_t height = 1440;
-    bool fullDesktop = true;         // Borderless fullscreen at desktop resolution
-    bool exclusiveFullscreen = false; // Exclusive fullscreen (changes display resolution)
+    bool borderless = false;          // Use WS_POPUP (no title bar / borders) at the given width x height
+    bool fullDesktop = true;          // Borderless fullscreen at desktop resolution
+    bool exclusiveFullscreen = false;  // Exclusive fullscreen (changes display resolution)
     bool resizable = true;
     bool vsync = true;
 
@@ -79,6 +80,11 @@ public:
 
     // Get current input state
     virtual const InputState& getInputState() const = 0;
+
+    // Focus-loss tracking: returns true if the window lost focus since the last reset.
+    // Used to detect when the user switches away from the test window.
+    virtual bool wasFocusLost() const { return false; }
+    virtual void resetFocusLost() {}
 
     // Platform-specific native handle
     // Returns HWND on Windows, GLFWwindow* on GLFW, etc.
