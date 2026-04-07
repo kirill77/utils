@@ -86,6 +86,14 @@ D3D12SwapChain::D3D12SwapChain(ID3D12Device* pDevice, HWND hWnd, IDXGIFactory6* 
     createDepthBuffer();
 }
 
+D3D12SwapChain::~D3D12SwapChain()
+{
+    if (m_pQueue)
+    {
+        m_pQueue->flush();
+    }
+}
+
 IDXGISwapChain4* D3D12SwapChain::getSwapChain()
 {
     return m_pSwapChain.Get();

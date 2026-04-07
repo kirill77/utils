@@ -12,7 +12,7 @@ class D3D12SwapChain
 {
 public:
     D3D12SwapChain(ID3D12Device* pDevice, HWND hWnd, IDXGIFactory6* pFactory);
-    ~D3D12SwapChain() = default;
+    ~D3D12SwapChain();
 
     // Swap chain access
     IDXGISwapChain4* getSwapChain();
