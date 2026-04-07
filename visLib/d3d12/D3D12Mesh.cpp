@@ -2,15 +2,26 @@
 
 #include "utils/visLib/d3d12/internal/D3D12Common.h"
 #include "D3D12Mesh.h"
+#include "utils/visLib/d3d12/internal/D3D12Queue.h"
 #include "utils/visLib/d3d12/internal/DirectXHelpers.h"
 #include "utils/visLib/d3d12/internal/CD3DX12.h"
 #include <stdexcept>
 
 namespace visLib {
 
-D3D12Mesh::D3D12Mesh(Microsoft::WRL::ComPtr<ID3D12Device> device)
-    : m_device(device)
+D3D12Mesh::D3D12Mesh(Microsoft::WRL::ComPtr<ID3D12Device> device, std::weak_ptr<D3D12Queue> pQueue)
+    : m_pQueue(std::move(pQueue))
+    , m_device(device)
 {
+}
+
+D3D12Mesh::~D3D12Mesh()
+{
+    if (auto pQueue = m_pQueue.lock())
+    {
+        if (m_vertexBuffer) pQueue->deferRelease(m_vertexBuffer);
+        if (m_indexBuffer)  pQueue->deferRelease(m_indexBuffer);
+    }
 }
 
 Microsoft::WRL::ComPtr<ID3D12Resource> D3D12Mesh::createOrUpdateUploadBuffer(
@@ -30,7 +41,9 @@ Microsoft::WRL::ComPtr<ID3D12Resource> D3D12Mesh::createOrUpdateUploadBuffer(
         }
         else
         {
-            // Size changed, need to create new buffer
+            // Size changed — defer-release old buffer before creating new one
+            if (auto pQueue = m_pQueue.lock())
+                pQueue->deferRelease(existingBuffer);
             existingBuffer.Reset();
         }
     }
@@ -102,6 +115,9 @@ void D3D12Mesh::setGeometry(
     }
     else
     {
+        if (m_vertexBuffer)
+            if (auto pQueue = m_pQueue.lock())
+                pQueue->deferRelease(m_vertexBuffer);
         m_vertexBuffer.Reset();
         m_vertexBufferView = {};
     }
@@ -134,6 +150,9 @@ void D3D12Mesh::setGeometry(
     }
     else
     {
+        if (m_indexBuffer)
+            if (auto pQueue = m_pQueue.lock())
+                pQueue->deferRelease(m_indexBuffer);
         m_indexBuffer.Reset();
         m_indexBufferView = {};
     }

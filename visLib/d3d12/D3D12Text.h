@@ -13,6 +13,7 @@ namespace visLib {
 
 // Forward declarations
 class D3D12SwapChain;
+class D3D12Queue;
 
 // D3D12TextLine - D3D12 implementation of TextLine
 class D3D12TextLine : public TextLine
@@ -44,8 +45,8 @@ private:
 class D3D12Text : public IText
 {
 public:
-    D3D12Text(std::shared_ptr<D3D12Font> pFont);
-    ~D3D12Text() override = default;
+    D3D12Text(std::shared_ptr<D3D12Font> pFont, std::weak_ptr<D3D12Queue> pQueue = {});
+    ~D3D12Text() override;
 
     // IText interface implementation
     void setPosition(const float2& position) override { m_position = position; }
@@ -89,6 +90,7 @@ private:
     void ensureDescriptorHeaps(ID3D12Device* pDevice);
 
 private:
+    std::weak_ptr<D3D12Queue> m_pQueue;
     std::shared_ptr<D3D12Font> m_pFont;
     float2 m_position;
     float4 m_defaultColor = float4(1.0f, 1.0f, 1.0f, 1.0f);

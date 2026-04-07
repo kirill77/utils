@@ -7,12 +7,14 @@
 
 namespace visLib {
 
+class D3D12Queue;
+
 // D3D12Mesh - D3D12 implementation of IMesh interface
 class D3D12Mesh : public IMesh
 {
 public:
-    D3D12Mesh(Microsoft::WRL::ComPtr<ID3D12Device> device);
-    ~D3D12Mesh() override = default;
+    D3D12Mesh(Microsoft::WRL::ComPtr<ID3D12Device> device, std::weak_ptr<D3D12Queue> pQueue = {});
+    ~D3D12Mesh() override;
 
     // IMesh interface implementation
     void setGeometry(
@@ -36,6 +38,7 @@ private:
         Microsoft::WRL::ComPtr<ID3D12Resource>& existingBuffer);
 
 private:
+    std::weak_ptr<D3D12Queue> m_pQueue;
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_indexBuffer;

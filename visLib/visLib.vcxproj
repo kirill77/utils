@@ -180,6 +180,7 @@
     <ClInclude Include="d3d12\internal\D3D12Common.h" />
     <ClInclude Include="d3d12\internal\CD3DX12.h" />
     <ClInclude Include="d3d12\internal\DirectXHelpers.h" />
+    <ClInclude Include="d3d12\internal\D3D12DeferredDeletion.h" />
     <ClInclude Include="d3d12\internal\D3D12Queue.h" />
     <ClInclude Include="d3d12\internal\D3D12ShaderHelper.h" />
     <ClInclude Include="d3d12\internal\g_EmbeddedShaders.h" />
@@ -208,6 +209,7 @@
     <ClCompile Include="d3d12\D3D12Text.cpp" />
     <ClCompile Include="d3d12\D3D12Window.cpp" />
     <ClCompile Include="d3d12\D3D12Query.cpp" />
+    <ClCompile Include="d3d12\internal\D3D12DeferredDeletion.cpp" />
     <ClCompile Include="d3d12\internal\D3D12Queue.cpp" />
     <ClCompile Include="d3d12\internal\D3D12ShaderHelper.cpp" />
     <ClCompile Include="d3d12\internal\D3D12SwapChain.cpp" />

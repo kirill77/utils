@@ -2,6 +2,7 @@
 
 #include "utils/visLib/d3d12/internal/D3D12Common.h"
 #include "D3D12Text.h"
+#include "utils/visLib/d3d12/internal/D3D12Queue.h"
 #include "utils/visLib/d3d12/internal/D3D12SwapChain.h"
 #include "utils/visLib/d3d12/internal/DirectXHelpers.h"
 #include "utils/visLib/d3d12/internal/CD3DX12.h"
@@ -68,10 +69,22 @@ void D3D12TextLine::setColor(const float4& color)
 // D3D12Text implementation
 //=============================================================================
 
-D3D12Text::D3D12Text(std::shared_ptr<D3D12Font> pFont)
-    : m_pFont(pFont)
+D3D12Text::D3D12Text(std::shared_ptr<D3D12Font> pFont, std::weak_ptr<D3D12Queue> pQueue)
+    : m_pQueue(std::move(pQueue))
+    , m_pFont(pFont)
     , m_position(0.0f, 0.0f)
 {
+}
+
+D3D12Text::~D3D12Text()
+{
+    if (auto pQueue = m_pQueue.lock())
+    {
+        if (m_vertexBuffer)   pQueue->deferRelease(m_vertexBuffer);
+        if (m_indexBuffer)    pQueue->deferRelease(m_indexBuffer);
+        if (m_constantBuffer) pQueue->deferRelease(m_constantBuffer);
+        if (m_descriptorHeap) pQueue->deferRelease(m_descriptorHeap);
+    }
 }
 
 std::shared_ptr<TextLine> D3D12Text::createLine()
@@ -212,6 +225,10 @@ void D3D12Text::updateVertexBuffer(
     // Create or recreate vertex buffer if size changed
     if (!m_vertexBuffer || m_vertexCount != vertices.size())
     {
+        if (m_vertexBuffer)
+            if (auto pQueue = m_pQueue.lock())
+                pQueue->deferRelease(m_vertexBuffer);
+
         m_vertexBuffer = CreateBuffer(pDevice, vertexBufferSize,
                                       D3D12_RESOURCE_FLAG_NONE,
                                       D3D12_RESOURCE_STATE_GENERIC_READ,
@@ -227,6 +244,10 @@ void D3D12Text::updateVertexBuffer(
     // Create or recreate index buffer if size changed
     if (!m_indexBuffer || m_indexCount != indices.size())
     {
+        if (m_indexBuffer)
+            if (auto pQueue = m_pQueue.lock())
+                pQueue->deferRelease(m_indexBuffer);
+
         m_indexBuffer = CreateBuffer(pDevice, indexBufferSize,
                                      D3D12_RESOURCE_FLAG_NONE,
                                      D3D12_RESOURCE_STATE_GENERIC_READ,

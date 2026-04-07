@@ -42,6 +42,7 @@ D3D12Queue::D3D12Queue(Microsoft::WRL::ComPtr<ID3D12Device> device)
 
 D3D12Queue::~D3D12Queue()
 {
+    m_deferredDeletion.releaseAll();
     if (m_fenceEvent)
     {
         CloseHandle(m_fenceEvent);
@@ -59,6 +60,9 @@ Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> D3D12Queue::beginRecording()
         ThrowIfFailed(m_fence->SetEventOnCompletion(m_fenceValues[m_currentAllocator], m_fenceEvent));
         WaitForSingleObject(m_fenceEvent, INFINITE);
     }
+
+    // Release deferred resources whose fence values have been reached
+    m_deferredDeletion.cleanup(m_fence.Get());
 
     // Reset the allocator and command list for recording
     ThrowIfFailed(m_commandAllocators[m_currentAllocator]->Reset());
@@ -95,6 +99,13 @@ void D3D12Queue::flush()
         ThrowIfFailed(m_fence->SetEventOnCompletion(waitValue, m_fenceEvent));
         WaitForSingleObject(m_fenceEvent, INFINITE);
     }
+
+    m_deferredDeletion.cleanup(m_fence.Get());
+}
+
+void D3D12Queue::deferRelease(Microsoft::WRL::ComPtr<IUnknown> resource)
+{
+    m_deferredDeletion.deferRelease(std::move(resource), m_nextFenceValue);
 }
 
 } // namespace visLib

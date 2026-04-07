@@ -97,6 +97,9 @@
     <ClInclude Include="d3d12\internal\DirectXHelpers.h">
       <Filter>d3d12\internal</Filter>
     </ClInclude>
+    <ClInclude Include="d3d12\internal\D3D12DeferredDeletion.h">
+      <Filter>d3d12\internal</Filter>
+    </ClInclude>
     <ClInclude Include="d3d12\internal\D3D12Queue.h">
       <Filter>d3d12\internal</Filter>
     </ClInclude>
@@ -159,6 +162,9 @@
     </ClCompile>
     <ClCompile Include="d3d12\D3D12Query.cpp">
       <Filter>d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="d3d12\internal\D3D12DeferredDeletion.cpp">
+      <Filter>d3d12\internal</Filter>
     </ClCompile>
     <ClCompile Include="d3d12\internal\D3D12Queue.cpp">
       <Filter>d3d12\internal</Filter>

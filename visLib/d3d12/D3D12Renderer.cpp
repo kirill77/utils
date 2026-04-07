@@ -38,7 +38,8 @@ D3D12Renderer::~D3D12Renderer()
 
 std::shared_ptr<IMesh> D3D12Renderer::createMesh()
 {
-    return std::make_shared<D3D12Mesh>(m_pWindow->getDevice());
+    auto pQueue = m_pWindow->getOrCreateSwapChain()->getQueue();
+    return std::make_shared<D3D12Mesh>(m_pWindow->getDevice(), pQueue);
 }
 
 std::shared_ptr<IFont> D3D12Renderer::createFont(uint32_t fontSize)
@@ -55,7 +56,8 @@ std::shared_ptr<IText> D3D12Renderer::createText(std::shared_ptr<IFont> font)
     {
         throw std::runtime_error("Font must be created by the same renderer");
     }
-    auto text = std::make_shared<D3D12Text>(d3d12Font);
+    auto pQueue = m_pWindow->getOrCreateSwapChain()->getQueue();
+    auto text = std::make_shared<D3D12Text>(d3d12Font, pQueue);
     m_textObjects.push_back(text);
     return text;
 }

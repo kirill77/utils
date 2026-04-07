@@ -3,6 +3,7 @@
 #ifdef _WIN32
 
 #include "D3D12Common.h"
+#include "D3D12DeferredDeletion.h"
 
 namespace visLib {
 
@@ -20,6 +21,10 @@ public:
     // Synchronization
     void flush();
 
+    // Deferred GPU resource deletion — enqueue a resource to be released
+    // after the GPU finishes the currently recording command list.
+    void deferRelease(Microsoft::WRL::ComPtr<IUnknown> resource);
+
     // Accessors
     ID3D12CommandQueue* getQueue() const { return m_commandQueue.Get(); }
     Microsoft::WRL::ComPtr<ID3D12Device> getDevice() const { return m_device; }
@@ -34,6 +39,7 @@ private:
     uint64_t m_fenceValues[2] = {};
     uint64_t m_nextFenceValue = 1;
     int m_currentAllocator = 0;
+    D3D12DeferredDeletion m_deferredDeletion;
 };
 
 } // namespace visLib
