@@ -57,14 +57,12 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
         }
     }
 
-    outMetrics.skippedFrames = skipFrames;
-
     if (intervals.size() < 2) {
         outError = "Not enough data rows after skipping " + std::to_string(skipFrames) + " frames";
         return false;
     }
 
-    outMetrics.frameCount = intervals.size();
+    outMetrics.analyzedFrames = intervals.size();
 
     // Mean
     double sum = 0.0;
@@ -79,9 +77,6 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
         sumSqDiff += diff * diff;
     }
     outMetrics.stddevMs = std::sqrt(sumSqDiff / static_cast<double>(intervals.size()));
-
-    // Coefficient of variation
-    outMetrics.coefficientOfVariation = (mean > 0.0) ? (outMetrics.stddevMs / mean) : 0.0;
 
     // Jitter: average relative difference between consecutive intervals (%)
     double jitterSum = 0.0;
