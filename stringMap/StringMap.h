@@ -25,6 +25,9 @@ class StringMap
 {
 public:
     StringMap() = default;
+    StringMap(std::initializer_list<std::pair<std::string, std::string>> init) {
+        for (const auto& [k, v] : init) m_data[k] = v;
+    }
 
     // --- Access ---
 
