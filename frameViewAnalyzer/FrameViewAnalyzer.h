@@ -5,9 +5,10 @@
 #include <string>
 
 struct FrameViewMetrics {
-    double avgIntervalMs = 0.0;              // mean(MsBetweenDisplayChange)
+    double avgFrameMs = 0.0;                  // mean(MsBetweenDisplayChange)
     double stddevMs = 0.0;                   // standard deviation of intervals
     double jitterPct = 0.0;                  // avg(|interval[i] - interval[i-1]| / interval[i-1] * 100)
+    double avgPcLatencyMs = 0.0;             // mean(MsPCLatency)
     size_t analyzedFrames = 0;               // number of frames analyzed (after skipping warmup)
 };
 

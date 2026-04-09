@@ -5,6 +5,7 @@
 #include <vector>
 
 static const char* const COLUMN_NAME = "MsBetweenDisplayChange";
+static const char* const LATENCY_COLUMN_NAME = "MsPCLatency";
 
 bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
                                 size_t skipFrames,
@@ -19,22 +20,22 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
         return false;
     }
 
-    // Find the MsBetweenDisplayChange column
+    // Find the MsBetweenDisplayChange and MsPCLatency columns
     const auto& headers = reader.getHeaders();
     size_t colIndex = headers.size(); // invalid sentinel
+    size_t latencyColIndex = headers.size();
     for (size_t i = 0; i < headers.size(); ++i) {
-        if (headers[i] == COLUMN_NAME) {
-            colIndex = i;
-            break;
-        }
+        if (headers[i] == COLUMN_NAME) colIndex = i;
+        else if (headers[i] == LATENCY_COLUMN_NAME) latencyColIndex = i;
     }
     if (colIndex >= headers.size()) {
         outError = std::string("Column '") + COLUMN_NAME + "' not found in " + csvPath.string();
         return false;
     }
 
-    // Read all rows, skip warmup frames, collect intervals
+    // Read all rows, skip warmup frames, collect intervals and latencies
     std::vector<double> intervals;
+    std::vector<double> latencies;
     std::vector<std::string> row;
     size_t rowIndex = 0;
 
@@ -55,6 +56,15 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
                 // Skip unparseable values
             }
         }
+
+        if (latencyColIndex < row.size() && !row[latencyColIndex].empty()) {
+            try {
+                double val = std::stod(row[latencyColIndex]);
+                if (val > 0.0) {
+                    latencies.push_back(val);
+                }
+            } catch (...) {}
+        }
     }
 
     if (intervals.size() < 2) {
@@ -68,7 +78,7 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
     double sum = 0.0;
     for (double v : intervals) sum += v;
     double mean = sum / static_cast<double>(intervals.size());
-    outMetrics.avgIntervalMs = mean;
+    outMetrics.avgFrameMs = mean;
 
     // Standard deviation
     double sumSqDiff = 0.0;
@@ -84,6 +94,13 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
         jitterSum += std::abs(intervals[i] - intervals[i - 1]) / intervals[i - 1] * 100.0;
     }
     outMetrics.jitterPct = jitterSum / static_cast<double>(intervals.size() - 1);
+
+    // PC latency (optional column)
+    if (!latencies.empty()) {
+        double latSum = 0.0;
+        for (double v : latencies) latSum += v;
+        outMetrics.avgPcLatencyMs = latSum / static_cast<double>(latencies.size());
+    }
 
     return true;
 }
