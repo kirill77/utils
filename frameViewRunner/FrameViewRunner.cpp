@@ -338,48 +338,18 @@ bool FrameViewRunner::modifyIniFile(std::string& outError)
             return false;
         }
 
-        std::ifstream inputFile(settingsIniPath);
-        if (!inputFile.is_open()) {
-            outError = "Failed to open Settings.ini for reading";
-            LOG_ERROR("FrameViewRunner: %s", outError.c_str());
-            return false;
-        }
+        // Use WritePrivateProfileStringW with an absolute path so the write
+        // lands in the correct [Setting] section regardless of CWD.
+        std::wstring iniPathW = settingsIniPath.wstring();
+        std::wstring outputDirW = m_outputDirectory.wstring();
 
-        std::vector<std::string> lines;
-        std::string line;
-        while (std::getline(inputFile, line)) {
-            if (line.find("CaptureOnLaunchDurationInSeconds") != std::string::npos) {
-                LOG_INFO("FrameViewRunner: Removing existing CaptureOnLaunchDurationInSeconds");
-                continue;
-            }
-            if (line.find("BenchmarkDirectory") != std::string::npos) {
-                LOG_INFO("FrameViewRunner: Removing existing BenchmarkDirectory");
-                continue;
-            }
-            lines.push_back(line);
-        }
-        inputFile.close();
+        WritePrivateProfileStringW(L"Setting", L"BenchmarkDirectory",
+                                   outputDirW.c_str(), iniPathW.c_str());
+        WritePrivateProfileStringW(L"Setting", L"CaptureOnLaunchDurationInSeconds",
+                                   L"1", iniPathW.c_str());
 
-        lines.push_back("CaptureOnLaunchDurationInSeconds=1");
-        
-        std::string outputDirStr = m_outputDirectory.string();
-        std::replace(outputDirStr.begin(), outputDirStr.end(), '\\', '/');
-        lines.push_back("BenchmarkDirectory=" + outputDirStr);
-
-        LOG_INFO("FrameViewRunner: Setting BenchmarkDirectory=%s", outputDirStr.c_str());
-
-        std::ofstream outputFile(settingsIniPath);
-        if (!outputFile.is_open()) {
-            outError = "Failed to open Settings.ini for writing";
-            LOG_ERROR("FrameViewRunner: %s", outError.c_str());
-            return false;
-        }
-
-        for (const std::string& modifiedLine : lines) {
-            outputFile << modifiedLine << std::endl;
-        }
-        outputFile.close();
-
+        LOG_INFO("FrameViewRunner: Setting BenchmarkDirectory=%s",
+                 m_outputDirectory.string().c_str());
         LOG_INFO("FrameViewRunner: Successfully modified Settings.ini");
         return true;
 
@@ -447,12 +417,6 @@ std::filesystem::path FrameViewRunner::findLatestCsvForApp(const std::string& ap
 {
     LOG_INFO("FrameViewRunner: Searching for CSV for app: %s", appName.c_str());
 
-    if (!std::filesystem::exists(m_outputDirectory)) {
-        LOG_WARN("FrameViewRunner: Output directory does not exist: %s", 
-                 m_outputDirectory.string().c_str());
-        return {};
-    }
-
     // Snapshot the consumed set so we don't hold the lock during directory I/O
     std::set<std::filesystem::path> consumedSnapshot;
     {
@@ -460,51 +424,48 @@ std::filesystem::path FrameViewRunner::findLatestCsvForApp(const std::string& ap
         consumedSnapshot = m_consumedCsvs;
     }
 
-    std::filesystem::path latestCsv;
-    std::filesystem::file_time_type latestTime;
-    bool foundAny = false;
-
-    try {
-        for (const auto& entry : std::filesystem::directory_iterator(m_outputDirectory)) {
-            if (!entry.is_regular_file()) {
-                continue;
+    auto searchDir = [&](const std::filesystem::path& dir,
+                         std::filesystem::path& outCsv) -> bool {
+        if (!std::filesystem::exists(dir)) return false;
+        std::filesystem::file_time_type latestTime;
+        bool found = false;
+        try {
+            for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+                if (!entry.is_regular_file()) continue;
+                const auto& filePath = entry.path();
+                if (filePath.extension() != ".csv") continue;
+                if (filePath.filename().string().find(appName) == std::string::npos) continue;
+                if (consumedSnapshot.count(filePath) > 0) continue;
+                auto writeTime = entry.last_write_time();
+                if (!found || writeTime > latestTime) {
+                    latestTime = writeTime;
+                    outCsv = filePath;
+                    found = true;
+                }
             }
-
-            const auto& filePath = entry.path();
-            
-            if (filePath.extension() != ".csv") {
-                continue;
-            }
-
-            std::string filename = filePath.filename().string();
-            if (filename.find(appName) == std::string::npos) {
-                continue;
-            }
-
-            if (consumedSnapshot.count(filePath) > 0) {
-                continue;
-            }
-
-            auto writeTime = entry.last_write_time();
-            if (!foundAny || writeTime > latestTime) {
-                latestTime = writeTime;
-                latestCsv = filePath;
-                foundAny = true;
-            }
+        } catch (const std::exception& e) {
+            LOG_ERROR("FrameViewRunner: Error searching for CSV in %s: %s",
+                      dir.string().c_str(), e.what());
         }
+        return found;
+    };
 
-    } catch (const std::exception& e) {
-        LOG_ERROR("FrameViewRunner: Error searching for CSV: %s", e.what());
-        return {};
-    }
-
-    if (foundAny) {
+    std::filesystem::path latestCsv;
+    if (searchDir(m_outputDirectory, latestCsv)) {
         LOG_INFO("FrameViewRunner: Found CSV: %s", latestCsv.string().c_str());
-    } else {
-        LOG_INFO("FrameViewRunner: No CSV found for app: %s", appName.c_str());
+        return latestCsv;
     }
 
-    return latestCsv;
+    // Fallback: some FrameView versions ignore BenchmarkDirectory and write
+    // CSVs next to their own executable.
+    if (searchDir(m_frameViewCopyPath, latestCsv)) {
+        LOG_WARN("FrameViewRunner: CSV not in Results dir, found in FrameView dir: %s",
+                 latestCsv.string().c_str());
+        return latestCsv;
+    }
+
+    LOG_INFO("FrameViewRunner: No CSV found for app: %s", appName.c_str());
+    return {};
 }
 
 void FrameViewRunner::notifyCsvConsumed(const std::filesystem::path& path)
