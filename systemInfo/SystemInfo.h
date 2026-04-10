@@ -89,12 +89,6 @@ struct SystemInfo {
      */
     static SystemInfo loadFromFile(const std::string& filename);
 
-    /**
-     * @brief Compute an uppercase 16-character hex hash that uniquely
-     *        identifies this hardware configuration.
-     *        Internally serializes to CSV and applies FNV-1a 64-bit.
-     */
-    std::string hashHex() const;
 };
 
 /**
