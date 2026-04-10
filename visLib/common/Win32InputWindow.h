@@ -45,6 +45,7 @@ public:
     bool wasFocusLost() const { return m_focusLost; }
     void resetFocusLost() { m_focusLost = false; }
 
+
     // Process pending window messages (call once per frame)
     void processMessages();
 

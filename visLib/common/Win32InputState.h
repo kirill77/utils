@@ -47,9 +47,12 @@ private:
     // Convert Win32 virtual key code to visLib::Key
     static Key vkToKey(WPARAM vkCode);
     
-    // Key state arrays
-    std::array<bool, static_cast<size_t>(Key::Count)> m_currentState;
-    std::array<bool, static_cast<size_t>(Key::Count)> m_previousState;
+    struct KeyState {
+        bool down = false;          // currently held
+        uint8_t pressCount = 0;     // down events this frame (cleared by beginFrame)
+        uint8_t releaseCount = 0;   // up events this frame (cleared by beginFrame)
+    };
+    std::array<KeyState, static_cast<size_t>(Key::Count)> m_keys;
     
     // Mouse state
     float2 m_mousePosition;
