@@ -149,9 +149,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="SystemInfo.h" />
+    <ClInclude Include="DisplayModeHelper.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="SystemInfo.cpp" />
+    <ClCompile Include="DisplayModeHelper.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

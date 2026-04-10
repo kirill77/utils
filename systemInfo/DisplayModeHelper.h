@@ -2,62 +2,53 @@
 
 #ifdef _WIN32
 #include <cstdint>
-#include <windows.h>
 
 /**
- * @class DisplayModeGuard
- * @brief RAII guard that temporarily changes the desktop refresh rate.
+ * @class RefreshRateControl
+ * @brief Gets or sets the desktop refresh rate on the primary monitor.
  *
  * Uses CDS_FULLSCREEN so the change is temporary and auto-reverts
- * if the process exits or crashes without an explicit restore.
+ * if the process exits or crashes.
  */
-class DisplayModeGuard {
+class RefreshRateControl {
 public:
-    ~DisplayModeGuard() = default;
+    RefreshRateControl() = default;
+    RefreshRateControl(const RefreshRateControl&) = delete;
+    RefreshRateControl& operator=(const RefreshRateControl&) = delete;
 
-    DisplayModeGuard() = default;
-    DisplayModeGuard(const DisplayModeGuard&) = delete;
-    DisplayModeGuard& operator=(const DisplayModeGuard&) = delete;
+    /// @return Current refresh rate in Hz, or 0 on failure.
+    uint32_t get();
 
-    /**
-     * @brief Change the primary monitor's desktop refresh rate.
-     * @param refreshRateHz Target refresh rate in Hz.
-     * @return true if the display mode was changed successfully.
-     */
-    bool apply(uint32_t refreshRateHz)
-    {
-        DEVMODEW devMode = {};
-        devMode.dmSize = sizeof(devMode);
-        // Get current settings to preserve resolution
-        if (!EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS, &devMode)) {
-            return false;
-        }
-        // Skip if already at the requested frequency
-        if (devMode.dmDisplayFrequency == refreshRateHz) {
-            return true;
-        }
-        devMode.dmDisplayFrequency = refreshRateHz;
-        devMode.dmFields = DM_DISPLAYFREQUENCY;
-        LONG result = ChangeDisplaySettingsW(&devMode, CDS_FULLSCREEN);
-        m_applied = (result == DISP_CHANGE_SUCCESSFUL);
-        return m_applied;
-    }
+    /// @brief Set the primary monitor's desktop refresh rate.
+    /// @return true if the display mode was changed successfully.
+    bool set(uint32_t refreshRateHz);
+};
 
-    /**
-     * @brief Restore the original display settings. Safe to call multiple times.
-     */
-    void restore()
-    {
-        if (m_applied) {
-            ChangeDisplaySettingsW(nullptr, 0);
-            m_applied = false;
-        }
-    }
+/**
+ * @class GSyncControl
+ * @brief Gets or sets G-Sync (adaptive sync) state on the primary monitor via NVAPI.
+ *
+ * Caches the NVAPI displayId after the first successful call.
+ * Does NOT restore original state — by design the system stays in
+ * whatever state the last test left it, to minimise display switching.
+ */
+class GSyncControl {
+public:
+    GSyncControl() = default;
+    GSyncControl(const GSyncControl&) = delete;
+    GSyncControl& operator=(const GSyncControl&) = delete;
 
-    bool isApplied() const { return m_applied; }
+    /// @return true if G-Sync is currently enabled, false if disabled or on failure.
+    bool get();
+
+    /// @brief Enable or disable G-Sync on the primary monitor.
+    /// @return true if the state was set (or was already in the desired state).
+    bool set(bool enable);
 
 private:
-    bool m_applied = false;
+    bool ensureDisplayId();
+
+    uint32_t m_displayId = 0;
 };
 
 #endif // _WIN32
