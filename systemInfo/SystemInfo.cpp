@@ -11,9 +11,12 @@
 #include <locale>
 #include <codecvt>
 
+#include <nvapi.h>
+
 using Microsoft::WRL::ComPtr;
 
 #pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "nvapi64.lib")
 
 // ============================================================================
 // Helper functions
@@ -311,6 +314,100 @@ std::vector<MonitorInfo> collectMonitorInfo() {
     return monitors;
 }
 
+// Enrich monitors with VRR / G-Sync capability info via NVAPI.
+void queryMonitorVRRCaps(std::vector<MonitorInfo>& monitors) {
+    if (NvAPI_Initialize() != NVAPI_OK) {
+        return;
+    }
+
+    NvPhysicalGpuHandle gpuHandles[NVAPI_MAX_PHYSICAL_GPUS] = {};
+    NvU32 gpuCount = 0;
+    if (NvAPI_EnumPhysicalGPUs(gpuHandles, &gpuCount) != NVAPI_OK || gpuCount == 0) {
+        NvAPI_Unload();
+        return;
+    }
+
+    for (NvU32 g = 0; g < gpuCount; ++g) {
+        // First call: get the display count
+        NvU32 displayCount = 0;
+        if (NvAPI_GPU_GetAllDisplayIds(gpuHandles[g], nullptr, &displayCount) != NVAPI_OK || displayCount == 0) {
+            continue;
+        }
+
+        std::vector<NV_GPU_DISPLAYIDS> displayIds(displayCount);
+        for (auto& d : displayIds) {
+            d.version = NV_GPU_DISPLAYIDS_VER;
+        }
+
+        if (NvAPI_GPU_GetAllDisplayIds(gpuHandles[g], displayIds.data(), &displayCount) != NVAPI_OK) {
+            continue;
+        }
+
+        for (NvU32 i = 0; i < displayCount; ++i) {
+            if (!displayIds[i].isActive) {
+                continue;
+            }
+
+            NV_MONITOR_CAPABILITIES monCaps = {};
+            monCaps.version = NV_MONITOR_CAPABILITIES_VER;
+            monCaps.infoType = NV_MONITOR_CAPS_TYPE_GENERIC;
+
+            if (NvAPI_DISP_GetMonitorCapabilities(displayIds[i].displayId, &monCaps) != NVAPI_OK) {
+                continue;
+            }
+            if (!monCaps.bIsValidInfo) {
+                continue;
+            }
+
+            const auto& caps = monCaps.data.caps;
+
+            // Match NVAPI display to our MonitorInfo list by GDI device name.
+            NvAPI_ShortString displayName = {};
+            if (NvAPI_GPU_GetFullName(gpuHandles[g], displayName) != NVAPI_OK) {
+                continue;
+            }
+
+            // Use the display index to match: NVAPI active displays map 1:1
+            // with monitors in the order the OS reports them for a given GPU.
+            // A simpler and more robust approach: tag every active display's
+            // monitor by iterating monitors and matching the display ordinal.
+            // Since we can't directly map NVAPI displayId -> GDI device name,
+            // we use NvAPI_GetAssociatedNvidiaDisplayHandle and compare.
+
+            // Try all monitors — for each, check if this NVAPI displayId maps.
+            for (auto& monitor : monitors) {
+                if (monitor.bSupportsVRR) {
+                    continue; // already resolved
+                }
+
+                // Get the GDI display name for this NVAPI displayId
+                NvDisplayHandle hDisplay = nullptr;
+                NvAPI_ShortString nvapiDisplayName = {};
+
+                // Iterate NVAPI logical displays to find the matching displayId
+                for (NvU32 e = 0; NvAPI_EnumNvidiaDisplayHandle(e, &hDisplay) == NVAPI_OK; ++e) {
+                    NvAPI_ShortString name = {};
+                    if (NvAPI_GetAssociatedNvidiaDisplayName(hDisplay, name) == NVAPI_OK) {
+                        // Check if this logical display maps to our displayId
+                        NvU32 outputId = 0;
+                        if (NvAPI_GetAssociatedDisplayOutputId(hDisplay, &outputId) == NVAPI_OK) {
+                            // Compare GDI name with our monitor's deviceName
+                            std::wstring nvapiDevName(name, name + strlen(name));
+                            if (monitor.deviceName == nvapiDevName) {
+                                monitor.bSupportsVRR = caps.supportVRR != 0;
+                                monitor.bIsTrueGSync = caps.isTrueGsync != 0;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    NvAPI_Unload();
+}
+
 } // anonymous namespace
 
 // ============================================================================
@@ -329,6 +426,7 @@ SystemInfo collectSystemInfo() {
     info.gpus = collectGpuInfo();
     info.cpu = collectCpuInfo();
     info.monitors = collectMonitorInfo();
+    queryMonitorVRRCaps(info.monitors);
     return info;
 }
 
@@ -388,14 +486,16 @@ std::string SystemInfo::toCSV() const {
 
     // Monitor section
     oss << "\n[Monitor]\n";
-    oss << "Name,DeviceName,Width,Height,RefreshHz,IsPrimary\n";
+    oss << "Name,DeviceName,Width,Height,RefreshHz,IsPrimary,SupportsVRR,IsTrueGSync\n";
     for (const auto& monitor : monitors) {
         oss << escapeCSV(wstringToUtf8(monitor.name)) << ","
             << escapeCSV(wstringToUtf8(monitor.deviceName)) << ","
             << monitor.widthPixels << ","
             << monitor.heightPixels << ","
             << monitor.refreshRateHz << ","
-            << (monitor.bIsPrimary ? 1 : 0) << "\n";
+            << (monitor.bIsPrimary ? 1 : 0) << ","
+            << (monitor.bSupportsVRR ? 1 : 0) << ","
+            << (monitor.bIsTrueGSync ? 1 : 0) << "\n";
     }
 
     // Supported display modes (per-monitor, for test permutation filtering)
@@ -496,6 +596,10 @@ SystemInfo SystemInfo::fromCSV(const std::string& csvData) {
                 monitor.heightPixels = static_cast<uint32_t>(std::stoul(fields[3]));
                 monitor.refreshRateHz = static_cast<uint32_t>(std::stoul(fields[4]));
                 monitor.bIsPrimary = (fields[5] == "1");
+                if (fields.size() >= 8) {
+                    monitor.bSupportsVRR = (fields[6] == "1");
+                    monitor.bIsTrueGSync = (fields[7] == "1");
+                }
                 info.monitors.push_back(monitor);
             }
             break;

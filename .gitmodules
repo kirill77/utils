@@ -1,3 +1,6 @@
 [submodule "stb"]
 	path = stb
 	url = https://github.com/nothings/stb.git
+[submodule "nvapi"]
+	path = nvapi
+	url = https://github.com/NVIDIA/nvapi

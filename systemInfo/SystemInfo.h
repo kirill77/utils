@@ -47,6 +47,8 @@ struct MonitorInfo {
     uint32_t heightPixels = 0;      ///< Vertical resolution in pixels
     uint32_t refreshRateHz = 0;     ///< Current refresh rate in Hz
     bool bIsPrimary = false;        ///< True if this is the primary monitor
+    bool bSupportsVRR = false;      ///< Monitor supports variable refresh rate (G-Sync/adaptive sync)
+    bool bIsTrueGSync = false;      ///< Monitor has a true G-Sync hardware module (vs adaptive sync)
     std::vector<DisplayMode> supportedModes;  ///< All display modes reported by the OS
 };
 
