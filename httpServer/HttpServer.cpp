@@ -10,6 +10,7 @@
 
 #pragma comment(lib, "Ws2_32.lib")
 
+#include <cctype>
 #include <sstream>
 #include <vector>
 
@@ -152,14 +153,51 @@ void HttpServer::handleClient(uintptr_t clientSocket)
 {
     SOCKET sock = static_cast<SOCKET>(clientSocket);
     
-    // Read request
+    // Read request: headers first, then body based on Content-Length
     std::vector<char> buffer(8192);
     std::string rawRequest;
-    
-    int bytesReceived = recv(sock, buffer.data(), static_cast<int>(buffer.size()) - 1, 0);
-    if (bytesReceived > 0) {
-        buffer[bytesReceived] = '\0';
-        rawRequest = buffer.data();
+
+    // Read until we have the full header block (terminated by \r\n\r\n)
+    while (true) {
+        int bytesReceived = recv(sock, buffer.data(), static_cast<int>(buffer.size()) - 1, 0);
+        if (bytesReceived <= 0) break;
+        rawRequest.append(buffer.data(), bytesReceived);
+        if (rawRequest.find("\r\n\r\n") != std::string::npos) break;
+    }
+
+    // Check Content-Length and read remaining body bytes if needed
+    size_t headerEnd = rawRequest.find("\r\n\r\n");
+    if (headerEnd != std::string::npos) {
+        size_t bodyStart = headerEnd + 4;
+        size_t contentLength = 0;
+
+        // Parse Content-Length from headers (case-insensitive search)
+        std::string headerBlock = rawRequest.substr(0, headerEnd);
+        for (size_t pos = 0; pos < headerBlock.size(); ) {
+            size_t lineEnd = headerBlock.find("\r\n", pos);
+            if (lineEnd == std::string::npos) lineEnd = headerBlock.size();
+            std::string line = headerBlock.substr(pos, lineEnd - pos);
+            // Case-insensitive prefix match for "content-length:"
+            if (line.size() > 15) {
+                std::string lower = line.substr(0, 15);
+                for (auto& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                if (lower == "content-length:") {
+                    contentLength = std::stoull(line.substr(15));
+                    break;
+                }
+            }
+            pos = lineEnd + 2;
+        }
+
+        size_t bodyReceived = rawRequest.size() - bodyStart;
+        while (bodyReceived < contentLength) {
+            size_t toRead = contentLength - bodyReceived;
+            if (toRead > buffer.size() - 1) toRead = buffer.size() - 1;
+            int bytesReceived = recv(sock, buffer.data(), static_cast<int>(toRead), 0);
+            if (bytesReceived <= 0) break;
+            rawRequest.append(buffer.data(), bytesReceived);
+            bodyReceived += bytesReceived;
+        }
     }
     
     // Parse and handle request
