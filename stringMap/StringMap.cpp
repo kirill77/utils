@@ -78,11 +78,7 @@ bool StringMap::save(const std::string& path) const
 {
     std::ofstream file(path);
     if (!file.is_open()) return false;
-
-    file << "// Written by StringMap\n";
-    for (const auto& [key, value] : m_data) {
-        file << key << '=' << escapeValue(value) << '\n';
-    }
+    writeTo(file);
     return file.good();
 }
 
@@ -91,9 +87,37 @@ StringMap StringMap::load(const std::string& path)
     StringMap result;
     std::ifstream file(path);
     if (!file.is_open()) return result;
+    result.parseFrom(file);
+    return result;
+}
 
+std::string StringMap::toString() const
+{
+    std::ostringstream out;
+    writeTo(out);
+    return out.str();
+}
+
+StringMap StringMap::parseString(const std::string& text)
+{
+    StringMap result;
+    std::istringstream in(text);
+    result.parseFrom(in);
+    return result;
+}
+
+void StringMap::writeTo(std::ostream& out) const
+{
+    out << "// Written by StringMap\n";
+    for (const auto& [key, value] : m_data) {
+        out << key << '=' << escapeValue(value) << '\n';
+    }
+}
+
+void StringMap::parseFrom(std::istream& in)
+{
     std::string line;
-    while (std::getline(file, line)) {
+    while (std::getline(in, line)) {
         if (line.empty()) continue;
         // Strip // comments
         auto commentPos = line.find("//");
@@ -105,9 +129,8 @@ StringMap StringMap::load(const std::string& path)
         if (eq == std::string::npos) continue;
         std::string key = line.substr(0, eq);
         std::string value = unescapeValue(line.substr(eq + 1));
-        result.m_data[key] = value;
+        m_data[key] = value;
     }
-    return result;
 }
 
 // ---------------------------------------------------------------------------

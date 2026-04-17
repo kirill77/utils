@@ -2,6 +2,7 @@
 
 #include <string>
 #include <map>
+#include <iosfwd>
 
 // A flat string key-value map with file I/O.
 //
@@ -57,7 +58,15 @@ public:
     bool save(const std::string& path) const;
     static StringMap load(const std::string& path);
 
+    // --- String I/O ---
+
+    std::string toString() const;
+    static StringMap parseString(const std::string& text);
+
 private:
+    void writeTo(std::ostream& out) const;
+    void parseFrom(std::istream& in);
+
     static std::string escapeValue(const std::string& raw);
     static std::string unescapeValue(const std::string& escaped);
 
