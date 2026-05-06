@@ -180,10 +180,14 @@ std::string StringMap::unescapeValue(const std::string& escaped)
 
 bool StringMap::parseArgs(int argc, char** argv,
                           const std::vector<std::string>& acceptedKeys,
-                          const std::string& usage)
+                          const std::string& usage,
+                          const std::vector<std::string>& flagKeys)
 {
     auto isAccepted = [&](const std::string& key) {
         return std::find(acceptedKeys.begin(), acceptedKeys.end(), key) != acceptedKeys.end();
+    };
+    auto isFlag = [&](const std::string& key) {
+        return std::find(flagKeys.begin(), flagKeys.end(), key) != flagKeys.end();
     };
 
     for (int i = 1; i < argc; ++i)
@@ -204,6 +208,7 @@ bool StringMap::parseArgs(int argc, char** argv,
 
         std::string key = a.substr(2);
         std::string value;
+        bool hasInlineValue = false;
 
         // Support --key=value form
         const auto eq = key.find('=');
@@ -211,8 +216,27 @@ bool StringMap::parseArgs(int argc, char** argv,
         {
             value = key.substr(eq + 1);
             key   = key.substr(0, eq);
+            hasInlineValue = true;
         }
-        else
+
+        if (isFlag(key))
+        {
+            if (hasInlineValue)
+            {
+                std::fprintf(stderr, "Flag --%s does not take a value\n", key.c_str());
+                return false;
+            }
+            set(key, "1");
+            continue;
+        }
+
+        if (!isAccepted(key))
+        {
+            std::fprintf(stderr, "Unknown flag: --%s\n", key.c_str());
+            return false;
+        }
+
+        if (!hasInlineValue)
         {
             if (i + 1 >= argc)
             {
@@ -220,12 +244,6 @@ bool StringMap::parseArgs(int argc, char** argv,
                 return false;
             }
             value = argv[++i];
-        }
-
-        if (!isAccepted(key))
-        {
-            std::fprintf(stderr, "Unknown flag: --%s\n", key.c_str());
-            return false;
         }
 
         set(key, value);

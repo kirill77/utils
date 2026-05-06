@@ -67,14 +67,16 @@ public:
     // --- CLI parsing ---
 
     // Parses argv[1..] as `--flag value` (or `--flag=value`) pairs and merges
-    // them into this map. Each --flag must appear in `acceptedKeys`; unknown
-    // flags produce an error.
+    // them into this map. Each --flag must appear in `acceptedKeys` (takes a
+    // value) or `flagKeys` (boolean, no value — stored as "1" when present).
+    // Unknown flags produce an error.
     // On `--help` / `-h`: prints `usage` to stdout and calls std::exit(0).
     // On parse error: prints message to stderr and returns false.
     // On success: returns true (caller checks `has(key)` for optional flags).
     bool parseArgs(int argc, char** argv,
                    const std::vector<std::string>& acceptedKeys,
-                   const std::string& usage);
+                   const std::string& usage,
+                   const std::vector<std::string>& flagKeys = {});
 
 private:
     void writeTo(std::ostream& out) const;
