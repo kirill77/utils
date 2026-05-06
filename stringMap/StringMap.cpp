@@ -1,5 +1,8 @@
 #include "utils/stringMap/StringMap.h"
 
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 
@@ -169,4 +172,63 @@ std::string StringMap::unescapeValue(const std::string& escaped)
         }
     }
     return out;
+}
+
+// ---------------------------------------------------------------------------
+// CLI parsing
+// ---------------------------------------------------------------------------
+
+bool StringMap::parseArgs(int argc, char** argv,
+                          const std::vector<std::string>& acceptedKeys,
+                          const std::string& usage)
+{
+    auto isAccepted = [&](const std::string& key) {
+        return std::find(acceptedKeys.begin(), acceptedKeys.end(), key) != acceptedKeys.end();
+    };
+
+    for (int i = 1; i < argc; ++i)
+    {
+        const std::string a = argv[i];
+
+        if (a == "--help" || a == "-h")
+        {
+            std::printf("%s", usage.c_str());
+            std::exit(0);
+        }
+
+        if (a.size() < 3 || a[0] != '-' || a[1] != '-')
+        {
+            std::fprintf(stderr, "Expected --flag, got '%s'\n", a.c_str());
+            return false;
+        }
+
+        std::string key = a.substr(2);
+        std::string value;
+
+        // Support --key=value form
+        const auto eq = key.find('=');
+        if (eq != std::string::npos)
+        {
+            value = key.substr(eq + 1);
+            key   = key.substr(0, eq);
+        }
+        else
+        {
+            if (i + 1 >= argc)
+            {
+                std::fprintf(stderr, "Missing value for --%s\n", key.c_str());
+                return false;
+            }
+            value = argv[++i];
+        }
+
+        if (!isAccepted(key))
+        {
+            std::fprintf(stderr, "Unknown flag: --%s\n", key.c_str());
+            return false;
+        }
+
+        set(key, value);
+    }
+    return true;
 }
