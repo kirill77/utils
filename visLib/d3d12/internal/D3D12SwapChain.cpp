@@ -111,6 +111,17 @@ ID3D12CommandQueue* D3D12SwapChain::getCommandQueue()
 
 void D3D12SwapChain::notifyWindowResized()
 {
+    // Drain the queue before releasing back buffers / depth buffer. Present()
+    // queues DXGI-internal GPU work on the command queue *after* our last fence
+    // signal, so a bare flush() (which waits on our last Signal) does NOT wait
+    // for that work. Submit empty work so the next Signal sits behind Present's
+    // queue work; flush() then waits for both. Same pattern as the destructor.
+    {
+        auto cmdList = m_pQueue->beginRecording();
+        m_pQueue->execute(cmdList);
+        m_pQueue->flush();
+    }
+
     // Release existing resources
     releaseBackBufferResources();
 
