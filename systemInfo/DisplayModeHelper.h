@@ -26,11 +26,17 @@ public:
 
 /**
  * @class GSyncControl
- * @brief Gets or sets G-Sync (adaptive sync) state on the primary monitor via NVAPI.
+ * @brief Gets or sets G-Sync state by writing VRR_MODE into a per-app DRS
+ *        profile keyed on slVerdict.exe.
  *
- * Caches the NVAPI displayId after the first successful call.
- * Does NOT restore original state — by design the system stays in
- * whatever state the last test left it, to minimise display switching.
+ * Per-monitor NvAPI_DISP_SetAdaptiveSyncData only updates the NVCPL checkbox
+ * state; it does NOT gate the driver's fullscreen-iFlip VRR engagement —
+ * which is what Streamline observes via NvAPI_D3D_GetSleepStatus. The DRS
+ * setting VRR_MODE does gate that engagement. Writing it to a per-app
+ * profile leaves the user's base profile untouched.
+ *
+ * Does NOT restore original state — the per-app profile is left in place
+ * across the test session.
  */
 class GSyncControl {
 public:
@@ -38,17 +44,14 @@ public:
     GSyncControl(const GSyncControl&) = delete;
     GSyncControl& operator=(const GSyncControl&) = delete;
 
-    /// @return true if G-Sync is currently enabled, false if disabled or on failure.
+    /// @return true if VRR_MODE in the slVerdict.exe profile is non-zero,
+    /// false if it is DISABLED, not yet set, or on failure.
     bool get();
 
-    /// @brief Enable or disable G-Sync on the primary monitor.
-    /// @return true if the state was set (or was already in the desired state).
+    /// @brief Set VRR_MODE in the slVerdict.exe per-app DRS profile.
+    /// @param enable true => FULLSCREEN_AND_WINDOWED, false => DISABLED.
+    /// @return true on success.
     bool set(bool enable);
-
-private:
-    bool ensureDisplayId();
-
-    uint32_t m_displayId = 0;
 };
 
 #endif // _WIN32
