@@ -51,21 +51,24 @@ D3D12Queue::~D3D12Queue()
 
 Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> D3D12Queue::beginRecording()
 {
-    // Switch to the other allocator
-    m_currentAllocator ^= 1;
-
-    // Wait until the GPU is done with this allocator's previous commands
-    if (m_fence->GetCompletedValue() < m_fenceValues[m_currentAllocator])
+    // Flip to the other allocator if its prior GPU work has landed and
+    // reclaim its memory via allocator->Reset(). If it hasn't landed,
+    // stay on the current allocator: D3D12 permits a new cmdList->Reset
+    // on an allocator that still has prior (Closed) command lists in
+    // flight — the new recording carves fresh bytes from the same bump
+    // pool, in-flight bytes are untouched. Pool grows by one frame's
+    // worth of command bytes per stay; it reclaims on the next
+    // allocator->Reset(). Effect: CPU never blocks here on the GPU.
+    const int other = m_currentAllocator ^ 1;
+    if (m_fence->GetCompletedValue() >= m_fenceValues[other])
     {
-        ThrowIfFailed(m_fence->SetEventOnCompletion(m_fenceValues[m_currentAllocator], m_fenceEvent));
-        WaitForSingleObject(m_fenceEvent, INFINITE);
+        m_currentAllocator = other;
+        ThrowIfFailed(m_commandAllocators[m_currentAllocator]->Reset());
     }
 
     // Release deferred resources whose fence values have been reached
     m_deferredDeletion.cleanup(m_fence.Get());
 
-    // Reset the allocator and command list for recording
-    ThrowIfFailed(m_commandAllocators[m_currentAllocator]->Reset());
     ThrowIfFailed(m_commandList->Reset(m_commandAllocators[m_currentAllocator].Get(), nullptr));
 
     return m_commandList;
