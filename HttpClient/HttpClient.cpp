@@ -29,7 +29,8 @@ static std::wstring getHostFromUrl(const std::wstring &url, INTERNET_PORT &port,
 }
 
 HttpResponse HttpClient::get(const std::wstring &url,
-                             const std::vector<std::pair<std::wstring, std::wstring>> &headers)
+                             const std::vector<std::pair<std::wstring, std::wstring>> &headers,
+                             int receiveTimeoutMs)
 {
     HttpResponse resp;
     INTERNET_PORT port = 0;
@@ -50,6 +51,21 @@ HttpResponse HttpClient::get(const std::wstring &url,
     {
         resp.errorMessage = "WinHttpOpen failed";
         return resp;
+    }
+
+    // WinHTTP's default receive-headers timeout is 30 s, which is too
+    // short for endpoints that compute responses server-side (e.g.
+    // SABIO-RK's searchKineticLaws/sbml takes ~75 s time-to-first-byte
+    // for a per-organism kcat query).  Callers opt in by passing a
+    // larger receiveTimeoutMs; static-file callers (PaxDB, GeneWiki)
+    // leave it at 0 and inherit WinHTTP's default.  WinHttpSetOption
+    // with WINHTTP_OPTION_RECEIVE_TIMEOUT modifies just the receive
+    // timeout — resolve / connect / send keep their WinHTTP defaults.
+    if (receiveTimeoutMs > 0)
+    {
+        DWORD t = static_cast<DWORD>(receiveTimeoutMs);
+        WinHttpSetOption(hSession, WINHTTP_OPTION_RECEIVE_TIMEOUT,
+                         &t, sizeof(t));
     }
 
     HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
