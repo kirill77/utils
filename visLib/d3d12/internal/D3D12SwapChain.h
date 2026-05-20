@@ -49,7 +49,8 @@ private:
     ID3D12Device* m_pDevice = nullptr;
     HWND m_hWnd = nullptr;
 
-    static constexpr UINT m_backBufferCount = 2;
+    // 3 is the more typical request from PC games than 2.
+    static constexpr UINT m_backBufferCount = 3;
 
     Microsoft::WRL::ComPtr<IDXGISwapChain4> m_pSwapChain;
     std::shared_ptr<D3D12Queue> m_pQueue;
