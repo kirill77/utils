@@ -4,6 +4,7 @@
 
 #include "utils/visLib/d3d12/internal/D3D12Common.h"
 #include "utils/visLib/include/IWindow.h"
+#include "utils/visLib/d3d12/D3D12WindowConfig.h"
 #include "utils/visLib/common/Win32InputWindow.h"
 #include "utils/visLib/d3d12/internal/D3D12SwapChain.h"
 #include <memory>
@@ -14,7 +15,7 @@ namespace visLib {
 class D3D12Window : public IWindow
 {
 public:
-    D3D12Window(const WindowConfig& config);
+    D3D12Window(const WindowConfig& config, const D3D12WindowConfig& d3dConfig = {});
     ~D3D12Window() override;
 
     // IWindow interface implementation

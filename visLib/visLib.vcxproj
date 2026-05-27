@@ -176,6 +176,7 @@
     <ClInclude Include="d3d12\D3D12Renderer.h" />
     <ClInclude Include="d3d12\D3D12Text.h" />
     <ClInclude Include="d3d12\D3D12Window.h" />
+    <ClInclude Include="d3d12\D3D12WindowConfig.h" />
     <ClInclude Include="d3d12\D3D12Query.h" />
     <ClInclude Include="d3d12\internal\D3D12Common.h" />
     <ClInclude Include="d3d12\internal\CD3DX12.h" />

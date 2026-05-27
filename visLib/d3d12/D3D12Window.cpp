@@ -7,8 +7,8 @@
 
 namespace visLib {
 
-D3D12Window::D3D12Window(const WindowConfig& config)
-    : m_d3d12Overrides(config.d3d12Overrides)
+D3D12Window::D3D12Window(const WindowConfig& config, const D3D12WindowConfig& d3dConfig)
+    : m_d3d12Overrides(d3dConfig.creationOverrides)
 {
     // Create Win32 window for input
     Win32WindowConfig winConfig;
@@ -182,6 +182,14 @@ void D3D12Window::onWindowResize(uint32_t width, uint32_t height, void* userData
         // Resize swap chain buffers
         self->m_pSwapChain->notifyWindowResized();
     }
+}
+
+// D3D12-specific factory: callers that know they want D3D12 (and may need
+// interposer hooks) pass a D3D12WindowConfig directly.
+std::unique_ptr<IWindow> createD3D12Window(const WindowConfig& config,
+                                            const D3D12WindowConfig& d3dConfig)
+{
+    return std::make_unique<D3D12Window>(config, d3dConfig);
 }
 
 // Factory function implementation

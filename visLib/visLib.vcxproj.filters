@@ -85,6 +85,9 @@
     <ClInclude Include="d3d12\D3D12Window.h">
       <Filter>d3d12</Filter>
     </ClInclude>
+    <ClInclude Include="d3d12\D3D12WindowConfig.h">
+      <Filter>d3d12</Filter>
+    </ClInclude>
     <ClInclude Include="d3d12\D3D12Query.h">
       <Filter>d3d12</Filter>
     </ClInclude>
