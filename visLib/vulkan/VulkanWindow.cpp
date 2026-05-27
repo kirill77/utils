@@ -232,8 +232,8 @@ void VulkanWindow::initVulkan(const VulkanWindowConfig& vkConfig)
     vkGetDeviceQueue(m_device, m_graphicsQueueFamily, 0, &m_graphicsQueue);
 }
 
-std::unique_ptr<IWindow> createVulkanWindow(const WindowConfig& config,
-                                             const VulkanWindowConfig& vkConfig)
+std::unique_ptr<VulkanWindow> createVulkanWindow(const WindowConfig& config,
+                                                  const VulkanWindowConfig& vkConfig)
 {
     return std::make_unique<VulkanWindow>(config, vkConfig);
 }

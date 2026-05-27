@@ -552,25 +552,10 @@ void D3D12Renderer::flush()
     }
 }
 
-// Factory function implementation
-std::shared_ptr<IRenderer> createRenderer(IWindow* window, const RendererConfig& config)
+// Peer factory: explicit D3D12 renderer constructor.
+std::shared_ptr<IRenderer> createD3D12Renderer(D3D12Window* pWindow, const RendererConfig& config)
 {
-    // Try D3D12 desktop window first
-    auto pD3D12Window = dynamic_cast<D3D12Window*>(window);
-    if (pD3D12Window)
-    {
-        return std::make_shared<D3D12Renderer>(pD3D12Window, config);
-    }
-
-    // Try OpenXR VR window
-    extern std::shared_ptr<IRenderer> tryCreateOpenXRRenderer(IWindow* window, const RendererConfig& config);
-    auto vrRenderer = tryCreateOpenXRRenderer(window, config);
-    if (vrRenderer)
-    {
-        return vrRenderer;
-    }
-
-    throw std::runtime_error("Unsupported window type for renderer creation");
+    return std::make_shared<D3D12Renderer>(pWindow, config);
 }
 
 } // namespace visLib

@@ -8,6 +8,8 @@
 
 namespace visLib {
 
+class VulkanWindow;
+
 // Vulkan-specific window configuration. Passed alongside the platform-agnostic
 // WindowConfig to the Vulkan backend factory.
 struct VulkanWindowConfig {
@@ -20,10 +22,11 @@ struct VulkanWindowConfig {
 #endif
 };
 
-// Vulkan-specific window factory. Use this (instead of createWindow) when the
-// caller wants to force the Vulkan backend.
-std::unique_ptr<IWindow> createVulkanWindow(const WindowConfig& config,
-                                             const VulkanWindowConfig& vkConfig = {});
+// Vulkan-specific window factory. Returns the concrete VulkanWindow type so
+// downstream peer factories (e.g. createVulkanRenderer) can be statically
+// type-checked against the matching backend.
+std::unique_ptr<VulkanWindow> createVulkanWindow(const WindowConfig& config,
+                                                  const VulkanWindowConfig& vkConfig = {});
 
 } // namespace visLib
 

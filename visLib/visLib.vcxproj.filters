@@ -205,6 +205,12 @@
     <ClCompile Include="vulkan\VulkanWindow.cpp">
       <Filter>vulkan</Filter>
     </ClCompile>
+    <ClCompile Include="vulkan\VulkanRenderer.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="vulkan\internal\VulkanSwapchain.cpp">
+      <Filter>vulkan\internal</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="vulkan\VulkanWindow.h">
@@ -213,7 +219,13 @@
     <ClInclude Include="vulkan\VulkanWindowConfig.h">
       <Filter>vulkan</Filter>
     </ClInclude>
+    <ClInclude Include="vulkan\VulkanRenderer.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
     <ClInclude Include="vulkan\internal\VulkanCommon.h">
+      <Filter>vulkan\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="vulkan\internal\VulkanSwapchain.h">
       <Filter>vulkan\internal</Filter>
     </ClInclude>
   </ItemGroup>

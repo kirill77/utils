@@ -117,6 +117,10 @@ private:
 };
 
 } // namespace openxr
+
+// Peer factory: construct an OpenXRRenderer for a concrete OpenXRWindow.
+std::shared_ptr<IRenderer> createOpenXRRenderer(openxr::OpenXRWindow* pWindow, const RendererConfig& config);
+
 } // namespace visLib
 
 #endif // _WIN32

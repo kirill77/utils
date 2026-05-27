@@ -12,6 +12,8 @@
 
 namespace visLib {
 
+class D3D12Window;
+
 // Optional overrides for D3D12/DXGI creation functions.
 // When set, these are used instead of the standard Windows APIs, allowing
 // an interposer (e.g., Streamline) to proxy device and factory creation.
@@ -29,11 +31,11 @@ struct D3D12WindowConfig {
     D3D12CreationOverrides creationOverrides;
 };
 
-// D3D12-specific window factory. Use this (instead of createWindow) when the
-// caller needs to pass interposer overrides or otherwise wants to force the
-// D3D12 backend.
-std::unique_ptr<IWindow> createD3D12Window(const WindowConfig& config,
-                                            const D3D12WindowConfig& d3dConfig = {});
+// D3D12-specific window factory. Returns the concrete D3D12Window type so
+// downstream peer factories (e.g. createD3D12Renderer) can be statically
+// type-checked against the matching backend.
+std::unique_ptr<D3D12Window> createD3D12Window(const WindowConfig& config,
+                                                const D3D12WindowConfig& d3dConfig = {});
 
 } // namespace visLib
 

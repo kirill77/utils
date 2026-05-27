@@ -9,6 +9,7 @@
 #include "utils/visLib/include/IWindow.h"
 #include "utils/visLib/include/IRenderer.h"
 #include <memory>
+#include <stdexcept>
 
 namespace visLib {
 
@@ -34,20 +35,14 @@ std::unique_ptr<IWindow> tryCreateOpenXRWindow(const WindowConfig& config)
     return vrWindow;
 }
 
-// Factory function to try creating an OpenXR renderer for a VR window
-// Returns nullptr if the window is not an OpenXR window
-std::shared_ptr<IRenderer> tryCreateOpenXRRenderer(IWindow* window, const RendererConfig& config)
+// Peer factory: construct an OpenXRRenderer for a concrete OpenXRWindow.
+// Throws if the window failed VR initialization (caller should have checked).
+std::shared_ptr<IRenderer> createOpenXRRenderer(openxr::OpenXRWindow* pWindow, const RendererConfig& config)
 {
-    auto vrWindow = dynamic_cast<openxr::OpenXRWindow*>(window);
-    if (!vrWindow) {
-        return nullptr;
+    if (!pWindow || !pWindow->isVRReady()) {
+        throw std::runtime_error("createOpenXRRenderer: window is not VR-ready");
     }
-
-    if (!vrWindow->isVRReady()) {
-        return nullptr;
-    }
-
-    return std::make_shared<openxr::OpenXRRenderer>(vrWindow, config);
+    return std::make_shared<openxr::OpenXRRenderer>(pWindow, config);
 }
 
 } // namespace visLib

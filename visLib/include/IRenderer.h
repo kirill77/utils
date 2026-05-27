@@ -107,11 +107,9 @@ public:
     virtual IWindow* getWindow() const = 0;
 };
 
-// Factory function declaration
-// Implementation provided by the backend (visLib_d3d12, visLib_vulkan, etc.)
-// window: The window to render to (must remain valid for renderer lifetime)
-// config: Renderer configuration options
-// Returns shared_ptr to enable shared ownership and enable_shared_from_this
-std::shared_ptr<IRenderer> createRenderer(IWindow* window, const RendererConfig& config = {});
+// Note: there is no polymorphic createRenderer here.
+// Each backend exposes its own peer factory (createD3D12Renderer,
+// createVulkanRenderer, createOpenXRRenderer) declared in the backend's
+// own header. Use the one that matches the window factory you called.
 
 } // namespace visLib

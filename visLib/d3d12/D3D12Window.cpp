@@ -185,9 +185,10 @@ void D3D12Window::onWindowResize(uint32_t width, uint32_t height, void* userData
 }
 
 // D3D12-specific factory: callers that know they want D3D12 (and may need
-// interposer hooks) pass a D3D12WindowConfig directly.
-std::unique_ptr<IWindow> createD3D12Window(const WindowConfig& config,
-                                            const D3D12WindowConfig& d3dConfig)
+// interposer hooks) pass a D3D12WindowConfig directly. Returns the concrete
+// type so peer renderer factories can be type-checked at the seam.
+std::unique_ptr<D3D12Window> createD3D12Window(const WindowConfig& config,
+                                                const D3D12WindowConfig& d3dConfig)
 {
     return std::make_unique<D3D12Window>(config, d3dConfig);
 }

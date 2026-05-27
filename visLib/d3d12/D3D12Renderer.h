@@ -91,6 +91,10 @@ private:
     uint8_t* m_pMappedTransformBuffer = nullptr;
 };
 
+// Peer factory: construct a D3D12Renderer for a concrete D3D12Window.
+// Type-checked at the seam — passing any other window type is a compile error.
+std::shared_ptr<IRenderer> createD3D12Renderer(D3D12Window* pWindow, const RendererConfig& config);
+
 } // namespace visLib
 
 #endif // _WIN32

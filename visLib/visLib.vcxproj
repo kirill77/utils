@@ -198,7 +198,9 @@
   <ItemGroup>
     <ClInclude Include="vulkan\VulkanWindow.h" />
     <ClInclude Include="vulkan\VulkanWindowConfig.h" />
+    <ClInclude Include="vulkan\VulkanRenderer.h" />
     <ClInclude Include="vulkan\internal\VulkanCommon.h" />
+    <ClInclude Include="vulkan\internal\VulkanSwapchain.h" />
   </ItemGroup>
   <!-- Common (Platform-Independent) Source Files -->
   <ItemGroup>
@@ -232,6 +234,8 @@
   <!-- Vulkan Backend Source Files -->
   <ItemGroup>
     <ClCompile Include="vulkan\VulkanWindow.cpp" />
+    <ClCompile Include="vulkan\VulkanRenderer.cpp" />
+    <ClCompile Include="vulkan\internal\VulkanSwapchain.cpp" />
   </ItemGroup>
   <!-- HLSL Shaders -->
   <ItemGroup>
