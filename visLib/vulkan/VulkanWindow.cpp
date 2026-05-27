@@ -42,6 +42,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugMessengerCallback(
 } // namespace
 
 VulkanWindow::VulkanWindow(const WindowConfig& config, const VulkanWindowConfig& vkConfig)
+    : m_overrides(vkConfig.creationOverrides)
 {
     Win32WindowConfig winConfig;
     winConfig.title = config.title;
@@ -129,7 +130,14 @@ void VulkanWindow::initVulkan(const VulkanWindowConfig& vkConfig)
     instInfo.enabledExtensionCount   = static_cast<uint32_t>(instanceExtensions.size());
     instInfo.ppEnabledExtensionNames = instanceExtensions.data();
 
-    if (vkCreateInstance(&instInfo, nullptr, &m_instance) != VK_SUCCESS) {
+    // Route through the SL proxy if provided so SL installs its dispatch
+    // tables in the resulting VkInstance; the per-handle dispatch design of
+    // Vulkan means subsequent vkXxx calls via the static-link loader still
+    // invoke SL's hooks once it owns the VkInstance.
+    auto fnCreateInstance = m_overrides.pfnVkCreateInstance
+        ? m_overrides.pfnVkCreateInstance
+        : &vkCreateInstance;
+    if (fnCreateInstance(&instInfo, nullptr, &m_instance) != VK_SUCCESS) {
         throw std::runtime_error("vkCreateInstance failed");
     }
 
@@ -234,7 +242,10 @@ void VulkanWindow::initVulkan(const VulkanWindowConfig& vkConfig)
     dci.ppEnabledExtensionNames = deviceExtensions;
     dci.pEnabledFeatures        = &requested;
 
-    if (vkCreateDevice(m_physicalDevice, &dci, nullptr, &m_device) != VK_SUCCESS) {
+    auto fnCreateDevice = m_overrides.pfnVkCreateDevice
+        ? m_overrides.pfnVkCreateDevice
+        : &vkCreateDevice;
+    if (fnCreateDevice(m_physicalDevice, &dci, nullptr, &m_device) != VK_SUCCESS) {
         throw std::runtime_error("vkCreateDevice failed");
     }
 

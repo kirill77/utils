@@ -52,6 +52,10 @@ private:
     std::unique_ptr<Win32InputWindow> m_window;
     bool m_isOpen = false;
 
+    // Captured from VulkanWindowConfig so initVulkan can route entry-points
+    // through SL when overrides are present.
+    VulkanCreationOverrides m_overrides;
+
     VkInstance               m_instance        = VK_NULL_HANDLE;
     VkDebugUtilsMessengerEXT m_debugMessenger  = VK_NULL_HANDLE;
     VkSurfaceKHR             m_surface         = VK_NULL_HANDLE;
