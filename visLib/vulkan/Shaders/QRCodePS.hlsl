@@ -21,8 +21,9 @@ cbuffer PixelParams {
 };
 
 // Push constants: World at offset 0 (64 bytes, vertex), IterCount at offset 64 (4 bytes, pixel).
+// World layout must match MeshVS (column-major default).
 struct PushConstants {
-    row_major matrix World;
+    matrix World;
     uint PerObjectIterationCount;
 };
 [[vk::push_constant]] PushConstants pushConsts;

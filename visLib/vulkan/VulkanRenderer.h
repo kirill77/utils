@@ -125,6 +125,9 @@ private:
     std::vector<std::weak_ptr<VulkanText>> m_textObjects;
 };
 
+// Peer factory: construct a VulkanRenderer for a concrete VulkanWindow.
+std::shared_ptr<IRenderer> createVulkanRenderer(VulkanWindow* pWindow, const RendererConfig& config);
+
 } // namespace visLib
 
 #endif // _WIN32

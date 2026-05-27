@@ -381,7 +381,12 @@ void VulkanRenderer::createMeshPipeline()
     VkPipelineRasterizationStateCreateInfo rs = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
     rs.polygonMode = m_config.wireframeMode ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
     rs.cullMode    = VK_CULL_MODE_BACK_BIT;
-    rs.frontFace   = VK_FRONT_FACE_CLOCKWISE;     // matches D3D12 FrontCounterClockwise=FALSE
+    // Vulkan's frontFace is the signed area in *framebuffer* space (Y-down).
+    // After our projection Y-flip in updateTransformCB, a D3D12-CW visual triangle
+    // produces a POSITIVE framebuffer shoelace, which Vulkan labels CCW. So
+    // accepting D3D12-shaped data (CW front per FrontCounterClockwise=FALSE)
+    // requires FRONT_FACE_COUNTER_CLOCKWISE here.
+    rs.frontFace   = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rs.lineWidth   = 1.0f;
 
     VkPipelineMultisampleStateCreateInfo ms = { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
@@ -553,8 +558,17 @@ void VulkanRenderer::updateTransformCB()
         m_camera.setAspectRatio(float(extent.width) / float(extent.height));
     }
     TransformCB cb = {};
-    writeMatrix(cb.view,       m_camera.getViewMatrix());
-    writeMatrix(cb.projection, m_camera.getProjectionMatrix());
+    writeMatrix(cb.view, m_camera.getViewMatrix());
+
+    // visLib's Camera builds a D3D12-style projection (+Y up in clip space).
+    // Vulkan NDC has +Y down, which would render geometry upside-down AND
+    // reverse winding (back-culling our front-faces). Flip the Y row so the
+    // post-divide NDC Y matches D3D12's, keeping rasterization identical
+    // across backends.
+    float4x4 proj = m_camera.getProjectionMatrix();
+    proj.row1.y = -proj.row1.y;
+    writeMatrix(cb.projection, proj);
+
     std::memcpy(m_transformMapped, &cb, sizeof(cb));
 }
 

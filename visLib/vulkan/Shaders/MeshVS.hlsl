@@ -13,16 +13,20 @@ struct VSOutput {
 };
 
 // Set 0, binding 0: view + projection matrices (per-frame).
+// No row_major qualifier — DXC/SPIR-V defaults to column-major to match
+// D3D12 cbuffer behavior. The CPU writes XMMATRIX-style bytes (visLib's
+// affine3 row layout); the shader interprets each "row" as a column, which
+// is exactly what mul(matrix, columnVec) expects.
 [[vk::binding(0, 0)]]
 cbuffer TransformCB {
-    row_major matrix View;
-    row_major matrix Projection;
+    matrix View;
+    matrix Projection;
 };
 
 // Push constants: per-object world matrix at offset 0,
 // per-object iteration count at offset 64 (used by the pixel shader).
 struct PushConstants {
-    row_major matrix World;
+    matrix World;
     uint PerObjectIterationCount;
 };
 [[vk::push_constant]] PushConstants pushConsts;
