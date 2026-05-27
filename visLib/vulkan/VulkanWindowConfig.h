@@ -15,9 +15,13 @@ class VulkanWindow;
 // instead of the statically-linked vulkan-1.dll entries. Used by Streamline
 // to install its dispatch tables (analog of D3D12CreationOverrides).
 struct VulkanCreationOverrides {
-    PFN_vkGetInstanceProcAddr pfnVkGetInstanceProcAddr = nullptr;  // optional, currently unused but reserved
-    PFN_vkCreateInstance      pfnVkCreateInstance      = nullptr;
-    PFN_vkCreateDevice        pfnVkCreateDevice        = nullptr;
+    PFN_vkGetInstanceProcAddr      pfnVkGetInstanceProcAddr      = nullptr;  // reserved for future dispatch refactor
+    PFN_vkCreateInstance           pfnVkCreateInstance           = nullptr;
+    PFN_vkCreateDevice             pfnVkCreateDevice             = nullptr;
+    // Streamline tracks instance<->physicalDevice mapping inside its
+    // vkEnumeratePhysicalDevices wrapper; bypassing that breaks SL's
+    // vkCreateDevice path. Route enumeration through SL when present.
+    PFN_vkEnumeratePhysicalDevices pfnVkEnumeratePhysicalDevices = nullptr;
 };
 
 // Vulkan-specific window configuration. Passed alongside the platform-agnostic

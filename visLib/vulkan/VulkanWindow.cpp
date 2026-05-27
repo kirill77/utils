@@ -165,13 +165,19 @@ void VulkanWindow::initVulkan(const VulkanWindowConfig& vkConfig)
     }
 
     // --- Physical device + queue family selection ---
+    // Route enumeration through SL's wrapper when present so its
+    // instanceDeviceMap[physDev] = instance bookkeeping is populated;
+    // without that, SL's vkCreateDevice crashes looking up a null instance.
+    auto fnEnum = m_overrides.pfnVkEnumeratePhysicalDevices
+        ? m_overrides.pfnVkEnumeratePhysicalDevices
+        : &vkEnumeratePhysicalDevices;
     uint32_t deviceCount = 0;
-    vkEnumeratePhysicalDevices(m_instance, &deviceCount, nullptr);
+    fnEnum(m_instance, &deviceCount, nullptr);
     if (deviceCount == 0) {
         throw std::runtime_error("No Vulkan physical devices");
     }
     std::vector<VkPhysicalDevice> devices(deviceCount);
-    vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data());
+    fnEnum(m_instance, &deviceCount, devices.data());
 
     auto pickQueueFamily = [&](VkPhysicalDevice pd, uint32_t& outFamily) -> bool {
         uint32_t qCount = 0;
@@ -227,20 +233,41 @@ void VulkanWindow::initVulkan(const VulkanWindowConfig& vkConfig)
 
     const char* deviceExtensions[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
-    // Enable optional features used by visLib's Vulkan path. Each is queried
-    // and only enabled if the physical device supports it.
-    VkPhysicalDeviceFeatures available = {};
-    vkGetPhysicalDeviceFeatures(m_physicalDevice, &available);
-    VkPhysicalDeviceFeatures requested = {};
-    requested.pipelineStatisticsQuery = available.pipelineStatisticsQuery;
-    requested.samplerAnisotropy       = available.samplerAnisotropy;
+    // Query supported features (1.0 + 1.2 + 1.3) and request the subset we use
+    // plus the bits Streamline's Vulkan plugins need. SL requires at minimum
+    // VkPhysicalDeviceVulkan13Features::privateData when sl.interposer is in
+    // the chain — without it, SL crashes during plugin startup. Enabling the
+    // related features (dynamicRendering, synchronization2, timelineSemaphore,
+    // bufferDeviceAddress) is cheap and covers the common SL plugin set.
+    VkPhysicalDeviceVulkan13Features supported13 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES };
+    VkPhysicalDeviceVulkan12Features supported12 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
+    supported12.pNext = &supported13;
+    VkPhysicalDeviceFeatures2 supported2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+    supported2.pNext = &supported12;
+    vkGetPhysicalDeviceFeatures2(m_physicalDevice, &supported2);
+
+    VkPhysicalDeviceVulkan13Features want13 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES };
+    want13.privateData       = supported13.privateData;
+    want13.dynamicRendering  = supported13.dynamicRendering;
+    want13.synchronization2  = supported13.synchronization2;
+
+    VkPhysicalDeviceVulkan12Features want12 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
+    want12.timelineSemaphore   = supported12.timelineSemaphore;
+    want12.bufferDeviceAddress = supported12.bufferDeviceAddress;
+    want12.pNext = &want13;
+
+    VkPhysicalDeviceFeatures2 want2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+    want2.features.pipelineStatisticsQuery = supported2.features.pipelineStatisticsQuery;
+    want2.features.samplerAnisotropy       = supported2.features.samplerAnisotropy;
+    want2.pNext = &want12;
 
     VkDeviceCreateInfo dci = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
     dci.queueCreateInfoCount    = 1;
     dci.pQueueCreateInfos       = &qci;
     dci.enabledExtensionCount   = 1;
     dci.ppEnabledExtensionNames = deviceExtensions;
-    dci.pEnabledFeatures        = &requested;
+    // pEnabledFeatures must be NULL when pNext points at VkPhysicalDeviceFeatures2.
+    dci.pNext                   = &want2;
 
     auto fnCreateDevice = m_overrides.pfnVkCreateDevice
         ? m_overrides.pfnVkCreateDevice
