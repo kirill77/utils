@@ -58,6 +58,10 @@ private:
 
     void initFrameResources();
     void destroyFrameResources();
+    void createRenderPass();
+    void createFramebuffers();
+    void createPipeline();
+    void destroyPipelineResources();
 
     VulkanWindow*    m_pWindow = nullptr;
     RendererConfig   m_config;
@@ -67,6 +71,14 @@ private:
     VkDevice         m_device = VK_NULL_HANDLE;
     VkQueue          m_queue  = VK_NULL_HANDLE;
     std::unique_ptr<VulkanSwapchain> m_pSwapchain;
+
+    // Render pass + framebuffers — one framebuffer per swapchain image
+    VkRenderPass                 m_renderPass = VK_NULL_HANDLE;
+    std::vector<VkFramebuffer>   m_framebuffers;
+
+    // Triangle pipeline (built from EmbeddedSpirvShaders::TriangleVS/TrianglePS)
+    VkPipelineLayout             m_pipelineLayout = VK_NULL_HANDLE;
+    VkPipeline                   m_pipeline       = VK_NULL_HANDLE;
 
     VkCommandPool                m_commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> m_commandBuffers;

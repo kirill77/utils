@@ -2,49 +2,27 @@
 
 #include "VulkanRenderer.h"
 #include "VulkanWindow.h"
+#include "internal/g_EmbeddedSpirvShaders.h"
 #include <stdexcept>
 
 namespace visLib {
 
 namespace {
 
-void recordClearAndTransition(VkCommandBuffer cmd, VkImage image, const float4& clearColor)
+VkShaderModule createShaderModule(VkDevice device, const std::string& name)
 {
-    // UNDEFINED → TRANSFER_DST_OPTIMAL
-    VkImageMemoryBarrier toDst = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
-    toDst.srcAccessMask       = 0;
-    toDst.dstAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT;
-    toDst.oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
-    toDst.newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    toDst.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    toDst.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    toDst.image               = image;
-    toDst.subresourceRange    = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-    vkCmdPipelineBarrier(cmd,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-        0, 0, nullptr, 0, nullptr, 1, &toDst);
-
-    VkClearColorValue cc = {};
-    cc.float32[0] = clearColor.x;
-    cc.float32[1] = clearColor.y;
-    cc.float32[2] = clearColor.z;
-    cc.float32[3] = clearColor.w;
-    VkImageSubresourceRange range = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-    vkCmdClearColorImage(cmd, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &cc, 1, &range);
-
-    // TRANSFER_DST_OPTIMAL → PRESENT_SRC_KHR
-    VkImageMemoryBarrier toPresent = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
-    toPresent.srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT;
-    toPresent.dstAccessMask       = 0;
-    toPresent.oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    toPresent.newLayout           = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    toPresent.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    toPresent.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    toPresent.image               = image;
-    toPresent.subresourceRange    = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-    vkCmdPipelineBarrier(cmd,
-        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-        0, 0, nullptr, 0, nullptr, 1, &toPresent);
+    auto [code, byteSize] = EmbeddedSpirvShaders::getShader(name);
+    if (!code) {
+        throw std::runtime_error("EmbeddedSpirvShaders::getShader missing: " + name);
+    }
+    VkShaderModuleCreateInfo ci = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+    ci.codeSize = byteSize;
+    ci.pCode    = code;
+    VkShaderModule m = VK_NULL_HANDLE;
+    if (vkCreateShaderModule(device, &ci, nullptr, &m) != VK_SUCCESS) {
+        throw std::runtime_error("vkCreateShaderModule failed for " + name);
+    }
+    return m;
 }
 
 } // namespace
@@ -56,6 +34,9 @@ VulkanRenderer::VulkanRenderer(VulkanWindow* pWindow, const RendererConfig& conf
     , m_queue(pWindow->getGraphicsQueue())
 {
     m_pSwapchain = std::make_unique<VulkanSwapchain>(pWindow);
+    createRenderPass();
+    createFramebuffers();
+    createPipeline();
     initFrameResources();
 }
 
@@ -65,7 +46,165 @@ VulkanRenderer::~VulkanRenderer()
         vkDeviceWaitIdle(m_device);
     }
     destroyFrameResources();
+    destroyPipelineResources();
     m_pSwapchain.reset();
+}
+
+void VulkanRenderer::createRenderPass()
+{
+    VkAttachmentDescription color = {};
+    color.format         = m_pSwapchain->getFormat();
+    color.samples        = VK_SAMPLE_COUNT_1_BIT;
+    color.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
+    color.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    color.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    color.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
+    color.finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkAttachmentReference colorRef = {};
+    colorRef.attachment = 0;
+    colorRef.layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass = {};
+    subpass.pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments    = &colorRef;
+
+    // External -> subpass 0: gate color writes on image acquisition.
+    VkSubpassDependency dep = {};
+    dep.srcSubpass    = VK_SUBPASS_EXTERNAL;
+    dep.dstSubpass    = 0;
+    dep.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dep.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dep.srcAccessMask = 0;
+    dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    VkRenderPassCreateInfo rpInfo = { VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO };
+    rpInfo.attachmentCount = 1;
+    rpInfo.pAttachments    = &color;
+    rpInfo.subpassCount    = 1;
+    rpInfo.pSubpasses      = &subpass;
+    rpInfo.dependencyCount = 1;
+    rpInfo.pDependencies   = &dep;
+
+    if (vkCreateRenderPass(m_device, &rpInfo, nullptr, &m_renderPass) != VK_SUCCESS) {
+        throw std::runtime_error("vkCreateRenderPass failed");
+    }
+}
+
+void VulkanRenderer::createFramebuffers()
+{
+    VkExtent2D extent = m_pSwapchain->getExtent();
+    uint32_t count = m_pSwapchain->getImageCount();
+    m_framebuffers.resize(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        VkImageView attach = m_pSwapchain->getImageView(i);
+        VkFramebufferCreateInfo fbi = { VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };
+        fbi.renderPass      = m_renderPass;
+        fbi.attachmentCount = 1;
+        fbi.pAttachments    = &attach;
+        fbi.width           = extent.width;
+        fbi.height          = extent.height;
+        fbi.layers          = 1;
+        if (vkCreateFramebuffer(m_device, &fbi, nullptr, &m_framebuffers[i]) != VK_SUCCESS) {
+            throw std::runtime_error("vkCreateFramebuffer failed");
+        }
+    }
+}
+
+void VulkanRenderer::createPipeline()
+{
+    // Empty pipeline layout — no descriptors, no push constants yet.
+    VkPipelineLayoutCreateInfo plci = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+    if (vkCreatePipelineLayout(m_device, &plci, nullptr, &m_pipelineLayout) != VK_SUCCESS) {
+        throw std::runtime_error("vkCreatePipelineLayout failed");
+    }
+
+    VkShaderModule vs = createShaderModule(m_device, "TriangleVS");
+    VkShaderModule ps = createShaderModule(m_device, "TrianglePS");
+
+    VkPipelineShaderStageCreateInfo stages[2] = {};
+    stages[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[0].stage  = VK_SHADER_STAGE_VERTEX_BIT;
+    stages[0].module = vs;
+    stages[0].pName  = "main";
+    stages[1].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[1].stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+    stages[1].module = ps;
+    stages[1].pName  = "main";
+
+    VkPipelineVertexInputStateCreateInfo vi = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
+
+    VkPipelineInputAssemblyStateCreateInfo ia = { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
+    ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+    VkPipelineViewportStateCreateInfo vp = { VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO };
+    vp.viewportCount = 1;
+    vp.scissorCount  = 1;
+
+    VkPipelineRasterizationStateCreateInfo rs = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
+    rs.polygonMode = VK_POLYGON_MODE_FILL;
+    rs.cullMode    = VK_CULL_MODE_NONE;
+    rs.frontFace   = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rs.lineWidth   = 1.0f;
+
+    VkPipelineMultisampleStateCreateInfo ms = { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
+    ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineColorBlendAttachmentState cba = {};
+    cba.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+    VkPipelineColorBlendStateCreateInfo cb = { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
+    cb.attachmentCount = 1;
+    cb.pAttachments    = &cba;
+
+    VkDynamicState dyn[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+    VkPipelineDynamicStateCreateInfo ds = { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
+    ds.dynamicStateCount = 2;
+    ds.pDynamicStates    = dyn;
+
+    VkGraphicsPipelineCreateInfo gpci = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
+    gpci.stageCount          = 2;
+    gpci.pStages             = stages;
+    gpci.pVertexInputState   = &vi;
+    gpci.pInputAssemblyState = &ia;
+    gpci.pViewportState      = &vp;
+    gpci.pRasterizationState = &rs;
+    gpci.pMultisampleState   = &ms;
+    gpci.pColorBlendState    = &cb;
+    gpci.pDynamicState       = &ds;
+    gpci.layout              = m_pipelineLayout;
+    gpci.renderPass          = m_renderPass;
+    gpci.subpass             = 0;
+
+    VkResult r = vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &gpci, nullptr, &m_pipeline);
+    vkDestroyShaderModule(m_device, vs, nullptr);
+    vkDestroyShaderModule(m_device, ps, nullptr);
+    if (r != VK_SUCCESS) {
+        throw std::runtime_error("vkCreateGraphicsPipelines failed");
+    }
+}
+
+void VulkanRenderer::destroyPipelineResources()
+{
+    if (m_pipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(m_device, m_pipeline, nullptr);
+        m_pipeline = VK_NULL_HANDLE;
+    }
+    if (m_pipelineLayout != VK_NULL_HANDLE) {
+        vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
+        m_pipelineLayout = VK_NULL_HANDLE;
+    }
+    for (auto fb : m_framebuffers) {
+        if (fb != VK_NULL_HANDLE) vkDestroyFramebuffer(m_device, fb, nullptr);
+    }
+    m_framebuffers.clear();
+    if (m_renderPass != VK_NULL_HANDLE) {
+        vkDestroyRenderPass(m_device, m_renderPass, nullptr);
+        m_renderPass = VK_NULL_HANDLE;
+    }
 }
 
 void VulkanRenderer::initFrameResources()
@@ -137,7 +276,39 @@ box3 VulkanRenderer::render(IQuery* /*query*/)
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     vkBeginCommandBuffer(cmd, &begin);
 
-    recordClearAndTransition(cmd, m_pSwapchain->getImage(m_currentImageIndex), m_config.clearColor);
+    VkClearValue clearValue = {};
+    clearValue.color.float32[0] = m_config.clearColor.x;
+    clearValue.color.float32[1] = m_config.clearColor.y;
+    clearValue.color.float32[2] = m_config.clearColor.z;
+    clearValue.color.float32[3] = m_config.clearColor.w;
+
+    VkExtent2D extent = m_pSwapchain->getExtent();
+
+    VkRenderPassBeginInfo rpBegin = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
+    rpBegin.renderPass        = m_renderPass;
+    rpBegin.framebuffer       = m_framebuffers[m_currentImageIndex];
+    rpBegin.renderArea.offset = { 0, 0 };
+    rpBegin.renderArea.extent = extent;
+    rpBegin.clearValueCount   = 1;
+    rpBegin.pClearValues      = &clearValue;
+    vkCmdBeginRenderPass(cmd, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
+
+    VkViewport viewport = {};
+    viewport.x        = 0.0f;
+    viewport.y        = 0.0f;
+    viewport.width    = static_cast<float>(extent.width);
+    viewport.height   = static_cast<float>(extent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+    VkRect2D scissor = { { 0, 0 }, extent };
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
+    vkCmdDraw(cmd, 3, 1, 0, 0);
+
+    vkCmdEndRenderPass(cmd);
 
     vkEndCommandBuffer(cmd);
 

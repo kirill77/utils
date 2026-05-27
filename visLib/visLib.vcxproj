@@ -75,6 +75,10 @@
   <Target Name="GenerateEmbeddedShaders" BeforeTargets="ClCompile">
     <Exec Command="powershell -ExecutionPolicy Bypass -NoProfile -File &quot;$(MSBuildThisFileDirectory)d3d12\Shaders\GenerateEmbeddedShaders.ps1&quot;" />
   </Target>
+  <!-- Generate g_EmbeddedSpirvShaders.h from Vulkan .hlsl files via DXC -->
+  <Target Name="GenerateEmbeddedSpirv" BeforeTargets="ClCompile">
+    <Exec Command="powershell -ExecutionPolicy Bypass -NoProfile -File &quot;$(MSBuildThisFileDirectory)vulkan\Shaders\GenerateEmbeddedSpirv.ps1&quot;" />
+  </Target>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -201,6 +205,13 @@
     <ClInclude Include="vulkan\VulkanRenderer.h" />
     <ClInclude Include="vulkan\internal\VulkanCommon.h" />
     <ClInclude Include="vulkan\internal\VulkanSwapchain.h" />
+    <ClInclude Include="vulkan\internal\g_EmbeddedSpirvShaders.h" />
+  </ItemGroup>
+  <!-- Vulkan HLSL Shaders -->
+  <ItemGroup>
+    <None Include="vulkan\Shaders\TriangleVS.hlsl" />
+    <None Include="vulkan\Shaders\TrianglePS.hlsl" />
+    <None Include="vulkan\Shaders\GenerateEmbeddedSpirv.ps1" />
   </ItemGroup>
   <!-- Common (Platform-Independent) Source Files -->
   <ItemGroup>

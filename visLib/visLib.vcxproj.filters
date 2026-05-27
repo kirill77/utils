@@ -25,6 +25,9 @@
     <Filter Include="vulkan\internal">
       <UniqueIdentifier>{F6A7B8C9-D0E1-2345-F012-3456789ABCDE}</UniqueIdentifier>
     </Filter>
+    <Filter Include="vulkan\Shaders">
+      <UniqueIdentifier>{A7B8C9D0-E1F2-3456-0123-456789ABCDEF}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <!-- Abstract Interface Headers -->
   <ItemGroup>
@@ -228,6 +231,20 @@
     <ClInclude Include="vulkan\internal\VulkanSwapchain.h">
       <Filter>vulkan\internal</Filter>
     </ClInclude>
+    <ClInclude Include="vulkan\internal\g_EmbeddedSpirvShaders.h">
+      <Filter>vulkan\internal</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="vulkan\Shaders\TriangleVS.hlsl">
+      <Filter>vulkan\Shaders</Filter>
+    </None>
+    <None Include="vulkan\Shaders\TrianglePS.hlsl">
+      <Filter>vulkan\Shaders</Filter>
+    </None>
+    <None Include="vulkan\Shaders\GenerateEmbeddedSpirv.ps1">
+      <Filter>vulkan\Shaders</Filter>
+    </None>
   </ItemGroup>
   <!-- HLSL Shaders -->
   <ItemGroup>
