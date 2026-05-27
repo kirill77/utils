@@ -211,6 +211,18 @@
     <ClCompile Include="vulkan\VulkanRenderer.cpp">
       <Filter>vulkan</Filter>
     </ClCompile>
+    <ClCompile Include="vulkan\VulkanMesh.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="vulkan\VulkanFont.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="vulkan\VulkanText.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="vulkan\VulkanQuery.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
     <ClCompile Include="vulkan\internal\VulkanSwapchain.cpp">
       <Filter>vulkan\internal</Filter>
     </ClCompile>
@@ -223,6 +235,18 @@
       <Filter>vulkan</Filter>
     </ClInclude>
     <ClInclude Include="vulkan\VulkanRenderer.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="vulkan\VulkanMesh.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="vulkan\VulkanFont.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="vulkan\VulkanText.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="vulkan\VulkanQuery.h">
       <Filter>vulkan</Filter>
     </ClInclude>
     <ClInclude Include="vulkan\internal\VulkanCommon.h">
@@ -240,6 +264,18 @@
       <Filter>vulkan\Shaders</Filter>
     </None>
     <None Include="vulkan\Shaders\TrianglePS.hlsl">
+      <Filter>vulkan\Shaders</Filter>
+    </None>
+    <None Include="vulkan\Shaders\MeshVS.hlsl">
+      <Filter>vulkan\Shaders</Filter>
+    </None>
+    <None Include="vulkan\Shaders\QRCodePS.hlsl">
+      <Filter>vulkan\Shaders</Filter>
+    </None>
+    <None Include="vulkan\Shaders\TextVS.hlsl">
+      <Filter>vulkan\Shaders</Filter>
+    </None>
+    <None Include="vulkan\Shaders\TextPS.hlsl">
       <Filter>vulkan\Shaders</Filter>
     </None>
     <None Include="vulkan\Shaders\GenerateEmbeddedSpirv.ps1">

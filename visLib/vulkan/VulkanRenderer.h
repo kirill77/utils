@@ -4,6 +4,7 @@
 
 #include "utils/visLib/include/IRenderer.h"
 #include "utils/visLib/include/Camera.h"
+#include "utils/visLib/include/MeshNode.h"
 #include "utils/visLib/vulkan/internal/VulkanCommon.h"
 #include "utils/visLib/vulkan/internal/VulkanSwapchain.h"
 #include <memory>
@@ -12,11 +13,15 @@
 namespace visLib {
 
 class VulkanWindow;
+class VulkanFont;
+class VulkanQuery;
+class VulkanText;
 
-// VulkanRenderer - IRenderer implementation for the Vulkan backend.
-// Step 2b scope: swapchain + clear-to-color + present, no geometry/shaders.
-// Factory methods for meshes/fonts/text/queries throw; nothing in slVerdict
-// currently routes scenes through this path.
+// VulkanRenderer - full IRenderer implementation for the Vulkan backend.
+// Owns the swapchain, render pass, per-frame command buffers + sync, descriptor
+// pool, mesh pipeline (MeshVS + QRCodePS), and text pipeline (TextVS + TextPS).
+// Mesh objects are uploaded as VkBuffers (host-visible) and drawn with a push
+// constant for the per-object world matrix and pixel shader iteration count.
 class VulkanRenderer : public IRenderer
 {
 public:
@@ -26,12 +31,12 @@ public:
     VulkanRenderer(const VulkanRenderer&) = delete;
     VulkanRenderer& operator=(const VulkanRenderer&) = delete;
 
-    // IRenderer factory methods (step 2b: not implemented yet)
-    std::shared_ptr<IMesh> createMesh() override;
-    std::shared_ptr<IFont> createFont(uint32_t fontSize) override;
-    std::shared_ptr<IText> createText(std::shared_ptr<IFont> font) override;
+    // IRenderer factory methods
+    std::shared_ptr<IMesh>  createMesh() override;
+    std::shared_ptr<IFont>  createFont(uint32_t fontSize) override;
+    std::shared_ptr<IText>  createText(std::shared_ptr<IFont> font) override;
 
-    // Scene management — objects are tracked but ignored during render() in 2b.
+    // Scene management
     void addObject(std::weak_ptr<IVisObject> object) override;
     void removeObject(std::weak_ptr<IVisObject> object) override;
     void clearObjects() override;
@@ -60,8 +65,16 @@ private:
     void destroyFrameResources();
     void createRenderPass();
     void createFramebuffers();
-    void createPipeline();
+    void createDescriptorResources();
+    void createUniformBuffers();
+    void createMeshPipeline();
+    void createTextPipeline();
     void destroyPipelineResources();
+
+    void renderMeshNode(VkCommandBuffer cmd, const MeshNode& node,
+                        const affine3& parentTransform,
+                        box3& outBounds, bool& hasBounds);
+    void updateTransformCB();
 
     VulkanWindow*    m_pWindow = nullptr;
     RendererConfig   m_config;
@@ -72,28 +85,45 @@ private:
     VkQueue          m_queue  = VK_NULL_HANDLE;
     std::unique_ptr<VulkanSwapchain> m_pSwapchain;
 
-    // Render pass + framebuffers — one framebuffer per swapchain image
+    // Render pass + per-image framebuffers
     VkRenderPass                 m_renderPass = VK_NULL_HANDLE;
     std::vector<VkFramebuffer>   m_framebuffers;
 
-    // Triangle pipeline (built from EmbeddedSpirvShaders::TriangleVS/TrianglePS)
-    VkPipelineLayout             m_pipelineLayout = VK_NULL_HANDLE;
-    VkPipeline                   m_pipeline       = VK_NULL_HANDLE;
+    // Shared descriptor pool large enough for mesh + text descriptor sets.
+    VkDescriptorPool             m_descriptorPool = VK_NULL_HANDLE;
 
+    // Mesh pipeline (MeshVS + QRCodePS, drives the scene loop).
+    VkDescriptorSetLayout        m_meshDSL          = VK_NULL_HANDLE;
+    VkDescriptorSet              m_meshDescriptorSet = VK_NULL_HANDLE;
+    VkPipelineLayout             m_meshPipelineLayout = VK_NULL_HANDLE;
+    VkPipeline                   m_meshPipeline       = VK_NULL_HANDLE;
+
+    // Text pipeline (TextVS + TextPS).
+    VkDescriptorSetLayout        m_textDSL          = VK_NULL_HANDLE;
+    VkPipelineLayout             m_textPipelineLayout = VK_NULL_HANDLE;
+    VkPipeline                   m_textPipeline       = VK_NULL_HANDLE;
+
+    // Uniform buffers for the mesh pipeline (TransformCB at binding 0, PixelParams at binding 1).
+    VkBuffer       m_transformBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory m_transformMemory = VK_NULL_HANDLE;
+    void*          m_transformMapped = nullptr;
+
+    VkBuffer       m_pixelParamsBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory m_pixelParamsMemory = VK_NULL_HANDLE;
+    void*          m_pixelParamsMapped = nullptr;
+
+    // Per-frame command buffers + sync primitives.
     VkCommandPool                m_commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> m_commandBuffers;
     std::vector<VkSemaphore>     m_imageAvailable;
     std::vector<VkSemaphore>     m_renderFinished;
     std::vector<VkFence>         m_inFlightFences;
-
-    uint32_t m_frameSlot         = 0;          // index into per-frame resources
-    uint32_t m_currentImageIndex = 0;          // valid between render() and present()
+    uint32_t m_frameSlot         = 0;
+    uint32_t m_currentImageIndex = 0;
 
     std::vector<std::weak_ptr<IVisObject>> m_objects;
+    std::vector<std::weak_ptr<VulkanText>> m_textObjects;
 };
-
-// Peer factory: construct a VulkanRenderer for a concrete VulkanWindow.
-std::shared_ptr<IRenderer> createVulkanRenderer(VulkanWindow* pWindow, const RendererConfig& config);
 
 } // namespace visLib
 

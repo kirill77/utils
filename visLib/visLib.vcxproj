@@ -203,6 +203,10 @@
     <ClInclude Include="vulkan\VulkanWindow.h" />
     <ClInclude Include="vulkan\VulkanWindowConfig.h" />
     <ClInclude Include="vulkan\VulkanRenderer.h" />
+    <ClInclude Include="vulkan\VulkanMesh.h" />
+    <ClInclude Include="vulkan\VulkanFont.h" />
+    <ClInclude Include="vulkan\VulkanText.h" />
+    <ClInclude Include="vulkan\VulkanQuery.h" />
     <ClInclude Include="vulkan\internal\VulkanCommon.h" />
     <ClInclude Include="vulkan\internal\VulkanSwapchain.h" />
     <ClInclude Include="vulkan\internal\g_EmbeddedSpirvShaders.h" />
@@ -211,6 +215,10 @@
   <ItemGroup>
     <None Include="vulkan\Shaders\TriangleVS.hlsl" />
     <None Include="vulkan\Shaders\TrianglePS.hlsl" />
+    <None Include="vulkan\Shaders\MeshVS.hlsl" />
+    <None Include="vulkan\Shaders\QRCodePS.hlsl" />
+    <None Include="vulkan\Shaders\TextVS.hlsl" />
+    <None Include="vulkan\Shaders\TextPS.hlsl" />
     <None Include="vulkan\Shaders\GenerateEmbeddedSpirv.ps1" />
   </ItemGroup>
   <!-- Common (Platform-Independent) Source Files -->
@@ -246,6 +254,10 @@
   <ItemGroup>
     <ClCompile Include="vulkan\VulkanWindow.cpp" />
     <ClCompile Include="vulkan\VulkanRenderer.cpp" />
+    <ClCompile Include="vulkan\VulkanMesh.cpp" />
+    <ClCompile Include="vulkan\VulkanFont.cpp" />
+    <ClCompile Include="vulkan\VulkanText.cpp" />
+    <ClCompile Include="vulkan\VulkanQuery.cpp" />
     <ClCompile Include="vulkan\internal\VulkanSwapchain.cpp" />
   </ItemGroup>
   <!-- HLSL Shaders -->

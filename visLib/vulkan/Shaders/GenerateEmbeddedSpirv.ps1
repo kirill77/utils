@@ -62,7 +62,11 @@ foreach ($file in $hlslFiles) {
         exit 1
     }
     $spvPath = Join-Path $tempDir "$name.spv"
-    & $dxc -spirv -T $profile -E main $file.FullName -Fo $spvPath 2>&1 | Out-Null
+    # -fvk-use-dx-layout keeps cbuffer member alignment matching D3D12's packing
+    # so the same CPU-side structs work for both backends. -fvk-use-dx-position-w
+    # avoids the SV_Position.w flip that's a footgun when porting D3D shaders.
+    & $dxc -spirv -fvk-use-dx-layout -fvk-use-dx-position-w `
+           -T $profile -E main $file.FullName -Fo $spvPath 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Error "DXC failed for $($file.Name)"
         exit 1

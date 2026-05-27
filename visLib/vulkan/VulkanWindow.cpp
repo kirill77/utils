@@ -219,11 +219,20 @@ void VulkanWindow::initVulkan(const VulkanWindowConfig& vkConfig)
 
     const char* deviceExtensions[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
+    // Enable optional features used by visLib's Vulkan path. Each is queried
+    // and only enabled if the physical device supports it.
+    VkPhysicalDeviceFeatures available = {};
+    vkGetPhysicalDeviceFeatures(m_physicalDevice, &available);
+    VkPhysicalDeviceFeatures requested = {};
+    requested.pipelineStatisticsQuery = available.pipelineStatisticsQuery;
+    requested.samplerAnisotropy       = available.samplerAnisotropy;
+
     VkDeviceCreateInfo dci = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
     dci.queueCreateInfoCount    = 1;
     dci.pQueueCreateInfos       = &qci;
     dci.enabledExtensionCount   = 1;
     dci.ppEnabledExtensionNames = deviceExtensions;
+    dci.pEnabledFeatures        = &requested;
 
     if (vkCreateDevice(m_physicalDevice, &dci, nullptr, &m_device) != VK_SUCCESS) {
         throw std::runtime_error("vkCreateDevice failed");
