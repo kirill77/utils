@@ -83,7 +83,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <LinkIncremental>false</LinkIncremental>
@@ -102,7 +102,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <LinkIncremental>false</LinkIncremental>
@@ -121,7 +121,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <LinkIncremental>false</LinkIncremental>
@@ -140,7 +140,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <LinkIncremental>false</LinkIncremental>
@@ -194,6 +194,12 @@
     <ClInclude Include="openxr\OpenXRWindow.h" />
     <ClInclude Include="openxr\OpenXRRenderer.h" />
   </ItemGroup>
+  <!-- Vulkan Backend Headers -->
+  <ItemGroup>
+    <ClInclude Include="vulkan\VulkanWindow.h" />
+    <ClInclude Include="vulkan\VulkanWindowConfig.h" />
+    <ClInclude Include="vulkan\internal\VulkanCommon.h" />
+  </ItemGroup>
   <!-- Common (Platform-Independent) Source Files -->
   <ItemGroup>
     <ClCompile Include="common\Camera.cpp" />
@@ -222,6 +228,10 @@
     <ClCompile Include="openxr\OpenXRWindow.cpp" />
     <ClCompile Include="openxr\OpenXRRenderer.cpp" />
     <ClCompile Include="openxr\OpenXRFactory.cpp" />
+  </ItemGroup>
+  <!-- Vulkan Backend Source Files -->
+  <ItemGroup>
+    <ClCompile Include="vulkan\VulkanWindow.cpp" />
   </ItemGroup>
   <!-- HLSL Shaders -->
   <ItemGroup>

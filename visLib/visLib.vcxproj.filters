@@ -19,6 +19,12 @@
     <Filter Include="openxr">
       <UniqueIdentifier>{D4E5F6A7-B8C9-0123-DEF0-123456789ABC}</UniqueIdentifier>
     </Filter>
+    <Filter Include="vulkan">
+      <UniqueIdentifier>{E5F6A7B8-C9D0-1234-EF01-23456789ABCD}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="vulkan\internal">
+      <UniqueIdentifier>{F6A7B8C9-D0E1-2345-F012-3456789ABCDE}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <!-- Abstract Interface Headers -->
   <ItemGroup>
@@ -196,6 +202,20 @@
     <ClCompile Include="openxr\OpenXRFactory.cpp">
       <Filter>openxr</Filter>
     </ClCompile>
+    <ClCompile Include="vulkan\VulkanWindow.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="vulkan\VulkanWindow.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="vulkan\VulkanWindowConfig.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="vulkan\internal\VulkanCommon.h">
+      <Filter>vulkan\internal</Filter>
+    </ClInclude>
   </ItemGroup>
   <!-- HLSL Shaders -->
   <ItemGroup>
