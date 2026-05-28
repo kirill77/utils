@@ -46,6 +46,12 @@ public:
     // Adapter name picked at device creation, for diagnostics.
     const std::string& getAdapterName() const    { return m_adapterName; }
 
+    // Function-pointer overrides captured at construction. Swapchain and
+    // renderer pull from here so SL's interposed swapchain/present/wait
+    // wrappers are used consistently with the window's surface + device
+    // creation path.
+    const VulkanCreationOverrides& getOverrides() const { return m_overrides; }
+
 private:
     void initVulkan(const VulkanWindowConfig& vkConfig);
 

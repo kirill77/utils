@@ -32,6 +32,12 @@ VulkanSwapchain::VulkanSwapchain(VulkanWindow* pWindow)
     : m_pWindow(pWindow)
     , m_device(pWindow->getDevice())
 {
+    const auto& ov = pWindow->getOverrides();
+    m_pfnCreateSwapchain    = ov.pfnVkCreateSwapchainKHR    ? ov.pfnVkCreateSwapchainKHR    : &vkCreateSwapchainKHR;
+    m_pfnDestroySwapchain   = ov.pfnVkDestroySwapchainKHR   ? ov.pfnVkDestroySwapchainKHR   : &vkDestroySwapchainKHR;
+    m_pfnGetSwapchainImages = ov.pfnVkGetSwapchainImagesKHR ? ov.pfnVkGetSwapchainImagesKHR : &vkGetSwapchainImagesKHR;
+    m_pfnAcquireNextImage   = ov.pfnVkAcquireNextImageKHR   ? ov.pfnVkAcquireNextImageKHR   : &vkAcquireNextImageKHR;
+    m_pfnQueuePresent       = ov.pfnVkQueuePresentKHR       ? ov.pfnVkQueuePresentKHR       : &vkQueuePresentKHR;
     create();
 }
 
@@ -82,14 +88,14 @@ void VulkanSwapchain::create()
     ci.clipped          = VK_TRUE;
     ci.oldSwapchain     = VK_NULL_HANDLE;
 
-    if (vkCreateSwapchainKHR(m_device, &ci, nullptr, &m_swapchain) != VK_SUCCESS) {
+    if (m_pfnCreateSwapchain(m_device, &ci, nullptr, &m_swapchain) != VK_SUCCESS) {
         throw std::runtime_error("vkCreateSwapchainKHR failed");
     }
 
     uint32_t count = 0;
-    vkGetSwapchainImagesKHR(m_device, m_swapchain, &count, nullptr);
+    m_pfnGetSwapchainImages(m_device, m_swapchain, &count, nullptr);
     m_images.resize(count);
-    vkGetSwapchainImagesKHR(m_device, m_swapchain, &count, m_images.data());
+    m_pfnGetSwapchainImages(m_device, m_swapchain, &count, m_images.data());
 
     m_imageViews.resize(count);
     for (uint32_t i = 0; i < count; ++i) {
@@ -117,7 +123,7 @@ void VulkanSwapchain::destroy()
     m_images.clear();
 
     if (m_swapchain != VK_NULL_HANDLE) {
-        vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
+        m_pfnDestroySwapchain(m_device, m_swapchain, nullptr);
         m_swapchain = VK_NULL_HANDLE;
     }
 }
@@ -125,7 +131,7 @@ void VulkanSwapchain::destroy()
 uint32_t VulkanSwapchain::acquireNextImage(VkSemaphore signalSemaphore, VkResult& outResult)
 {
     uint32_t index = 0;
-    outResult = vkAcquireNextImageKHR(m_device, m_swapchain, UINT64_MAX,
+    outResult = m_pfnAcquireNextImage(m_device, m_swapchain, UINT64_MAX,
                                        signalSemaphore, VK_NULL_HANDLE, &index);
     return index;
 }
@@ -138,7 +144,7 @@ VkResult VulkanSwapchain::present(VkQueue queue, uint32_t imageIndex, VkSemaphor
     pi.swapchainCount     = 1;
     pi.pSwapchains        = &m_swapchain;
     pi.pImageIndices      = &imageIndex;
-    return vkQueuePresentKHR(queue, &pi);
+    return m_pfnQueuePresent(queue, &pi);
 }
 
 } // namespace visLib

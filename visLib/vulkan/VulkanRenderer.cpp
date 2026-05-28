@@ -109,7 +109,11 @@ VulkanRenderer::VulkanRenderer(VulkanWindow* pWindow, const RendererConfig& conf
 
 VulkanRenderer::~VulkanRenderer()
 {
-    if (m_device != VK_NULL_HANDLE) vkDeviceWaitIdle(m_device);
+    if (m_device != VK_NULL_HANDLE) {
+        const auto& ov = m_pWindow->getOverrides();
+        auto fnWaitIdle = ov.pfnVkDeviceWaitIdle ? ov.pfnVkDeviceWaitIdle : &vkDeviceWaitIdle;
+        fnWaitIdle(m_device);
+    }
     destroyFrameResources();
     destroyPipelineResources();
     m_pSwapchain.reset();
@@ -726,7 +730,11 @@ void VulkanRenderer::present()
 
 void VulkanRenderer::flush()
 {
-    if (m_device != VK_NULL_HANDLE) vkDeviceWaitIdle(m_device);
+    if (m_device != VK_NULL_HANDLE) {
+        const auto& ov = m_pWindow->getOverrides();
+        auto fnWaitIdle = ov.pfnVkDeviceWaitIdle ? ov.pfnVkDeviceWaitIdle : &vkDeviceWaitIdle;
+        fnWaitIdle(m_device);
+    }
 }
 
 std::shared_ptr<IMesh> VulkanRenderer::createMesh()

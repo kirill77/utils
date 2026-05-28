@@ -42,6 +42,15 @@ private:
     VulkanWindow* m_pWindow = nullptr;
     VkDevice      m_device  = VK_NULL_HANDLE;
 
+    // Function-pointer overrides captured from the window. When non-null,
+    // we route through SL's interposed wrappers so SL can install its
+    // VK_NV_low_latency2 hooks on this swapchain.
+    PFN_vkCreateSwapchainKHR    m_pfnCreateSwapchain    = nullptr;
+    PFN_vkDestroySwapchainKHR   m_pfnDestroySwapchain   = nullptr;
+    PFN_vkGetSwapchainImagesKHR m_pfnGetSwapchainImages = nullptr;
+    PFN_vkAcquireNextImageKHR   m_pfnAcquireNextImage   = nullptr;
+    PFN_vkQueuePresentKHR       m_pfnQueuePresent       = nullptr;
+
     VkSwapchainKHR           m_swapchain = VK_NULL_HANDLE;
     std::vector<VkImage>     m_images;
     std::vector<VkImageView> m_imageViews;

@@ -66,13 +66,19 @@ VulkanWindow::VulkanWindow(const WindowConfig& config, const VulkanWindowConfig&
 VulkanWindow::~VulkanWindow()
 {
     if (m_device != VK_NULL_HANDLE) {
-        vkDeviceWaitIdle(m_device);
+        auto fnWaitIdle = m_overrides.pfnVkDeviceWaitIdle
+            ? m_overrides.pfnVkDeviceWaitIdle
+            : &vkDeviceWaitIdle;
+        fnWaitIdle(m_device);
         vkDestroyDevice(m_device, nullptr);
         m_device = VK_NULL_HANDLE;
     }
 
     if (m_surface != VK_NULL_HANDLE && m_instance != VK_NULL_HANDLE) {
-        vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+        auto fnDestroySurface = m_overrides.pfnVkDestroySurfaceKHR
+            ? m_overrides.pfnVkDestroySurfaceKHR
+            : &vkDestroySurfaceKHR;
+        fnDestroySurface(m_instance, m_surface, nullptr);
         m_surface = VK_NULL_HANDLE;
     }
 
@@ -160,7 +166,10 @@ void VulkanWindow::initVulkan(const VulkanWindowConfig& vkConfig)
     VkWin32SurfaceCreateInfoKHR sci = { VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR };
     sci.hinstance = GetModuleHandleW(nullptr);
     sci.hwnd      = m_window->getHandle();
-    if (vkCreateWin32SurfaceKHR(m_instance, &sci, nullptr, &m_surface) != VK_SUCCESS) {
+    auto fnCreateSurface = m_overrides.pfnVkCreateWin32SurfaceKHR
+        ? m_overrides.pfnVkCreateWin32SurfaceKHR
+        : &vkCreateWin32SurfaceKHR;
+    if (fnCreateSurface(m_instance, &sci, nullptr, &m_surface) != VK_SUCCESS) {
         throw std::runtime_error("vkCreateWin32SurfaceKHR failed");
     }
 
