@@ -67,6 +67,18 @@ uint32_t findHostVisibleMemoryType(VkPhysicalDevice pd, uint32_t typeBits) {
     throw std::runtime_error("No host-visible coherent memory type (renderer)");
 }
 
+uint32_t findDeviceLocalMemoryType(VkPhysicalDevice pd, uint32_t typeBits) {
+    VkPhysicalDeviceMemoryProperties props;
+    vkGetPhysicalDeviceMemoryProperties(pd, &props);
+    const VkMemoryPropertyFlags want = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    for (uint32_t i = 0; i < props.memoryTypeCount; ++i) {
+        if ((typeBits & (1u << i)) && (props.memoryTypes[i].propertyFlags & want) == want) {
+            return i;
+        }
+    }
+    throw std::runtime_error("No device-local memory type (renderer depth)");
+}
+
 void createHostUbo(VkDevice device, VkPhysicalDevice pd, VkDeviceSize size,
                     VkBuffer& outBuf, VkDeviceMemory& outMem, void*& outMapped)
 {
@@ -99,6 +111,7 @@ VulkanRenderer::VulkanRenderer(VulkanWindow* pWindow, const RendererConfig& conf
 {
     m_pSwapchain = std::make_unique<VulkanSwapchain>(pWindow);
     createRenderPass();
+    createDepthResources();
     createFramebuffers();
     createDescriptorResources();
     createUniformBuffers();
@@ -166,7 +179,15 @@ void VulkanRenderer::destroyFrameResources()
 
 void VulkanRenderer::createRenderPass()
 {
-    VkAttachmentDescription color = {};
+    // Pick a depth format up front so the render pass and the depth image
+    // (created right after) agree. D32_SFLOAT is required by spec to be
+    // supported as a depth attachment; no stencil, which matches what DLSS-G
+    // wants for the kBufferTypeDepth tag (it only reads depth values).
+    m_depthFormat = VK_FORMAT_D32_SFLOAT;
+
+    VkAttachmentDescription attachments[2] = {};
+
+    VkAttachmentDescription& color = attachments[0];
     color.format        = m_pSwapchain->getFormat();
     color.samples       = VK_SAMPLE_COUNT_1_BIT;
     color.loadOp        = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -176,26 +197,52 @@ void VulkanRenderer::createRenderPass()
     color.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     color.finalLayout   = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
+    VkAttachmentDescription& depth = attachments[1];
+    depth.format        = m_depthFormat;
+    depth.samples       = VK_SAMPLE_COUNT_1_BIT;
+    depth.loadOp        = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    // STORE so the contents survive past EndRenderPass — SL Frame Generation
+    // reads the depth attachment when it interpolates frames at present time.
+    depth.storeOp       = VK_ATTACHMENT_STORE_OP_STORE;
+    depth.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    depth.stencilStoreOp= VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depth.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    // Leave the image in a layout SL can barrier-transition from when it
+    // tags this resource. SL manages its own input layouts; we just need a
+    // sensible "after-pass" steady state.
+    depth.finalLayout   = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
     VkAttachmentReference colorRef = {};
     colorRef.attachment = 0;
     colorRef.layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
+    VkAttachmentReference depthRef = {};
+    depthRef.attachment = 1;
+    depthRef.layout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
     VkSubpassDescription subpass = {};
-    subpass.pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments    = &colorRef;
+    subpass.pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount    = 1;
+    subpass.pColorAttachments       = &colorRef;
+    subpass.pDepthStencilAttachment = &depthRef;
 
     VkSubpassDependency dep = {};
     dep.srcSubpass    = VK_SUBPASS_EXTERNAL;
     dep.dstSubpass    = 0;
-    dep.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dep.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    // Depth writes happen at EARLY_FRAGMENT_TESTS / LATE_FRAGMENT_TESTS.
+    // Include those stages alongside the color-attachment-output stage so the
+    // implicit layout transitions for both attachments are ordered correctly.
+    dep.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    dep.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dep.srcAccessMask = 0;
-    dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
     VkRenderPassCreateInfo rpInfo = { VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO };
-    rpInfo.attachmentCount = 1;
-    rpInfo.pAttachments    = &color;
+    rpInfo.attachmentCount = 2;
+    rpInfo.pAttachments    = attachments;
     rpInfo.subpassCount    = 1;
     rpInfo.pSubpasses      = &subpass;
     rpInfo.dependencyCount = 1;
@@ -205,17 +252,77 @@ void VulkanRenderer::createRenderPass()
     }
 }
 
+void VulkanRenderer::createDepthResources()
+{
+    VkExtent2D extent = m_pSwapchain->getExtent();
+    m_depthExtent = extent;
+
+    // SAMPLED_BIT lets SL bind the image to a descriptor when it needs depth
+    // for FG interpolation; DEPTH_STENCIL_ATTACHMENT_BIT is what we attach it
+    // as during the render pass.
+    m_depthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                   VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    VkImageCreateInfo ici = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+    ici.imageType     = VK_IMAGE_TYPE_2D;
+    ici.format        = m_depthFormat;
+    ici.extent        = { extent.width, extent.height, 1 };
+    ici.mipLevels     = 1;
+    ici.arrayLayers   = 1;
+    ici.samples       = VK_SAMPLE_COUNT_1_BIT;
+    ici.tiling        = VK_IMAGE_TILING_OPTIMAL;
+    ici.usage         = m_depthUsage;
+    ici.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
+    ici.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    if (vkCreateImage(m_device, &ici, nullptr, &m_depthImage) != VK_SUCCESS) {
+        throw std::runtime_error("vkCreateImage (depth) failed");
+    }
+
+    VkMemoryRequirements req = {};
+    vkGetImageMemoryRequirements(m_device, m_depthImage, &req);
+    VkMemoryAllocateInfo ai = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+    ai.allocationSize  = req.size;
+    ai.memoryTypeIndex = findDeviceLocalMemoryType(m_pWindow->getPhysicalDevice(), req.memoryTypeBits);
+    if (vkAllocateMemory(m_device, &ai, nullptr, &m_depthMemory) != VK_SUCCESS) {
+        throw std::runtime_error("vkAllocateMemory (depth) failed");
+    }
+    vkBindImageMemory(m_device, m_depthImage, m_depthMemory, 0);
+
+    VkImageViewCreateInfo vci = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+    vci.image    = m_depthImage;
+    vci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    vci.format   = m_depthFormat;
+    vci.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
+    vci.subresourceRange.baseMipLevel   = 0;
+    vci.subresourceRange.levelCount     = 1;
+    vci.subresourceRange.baseArrayLayer = 0;
+    vci.subresourceRange.layerCount     = 1;
+    if (vkCreateImageView(m_device, &vci, nullptr, &m_depthView) != VK_SUCCESS) {
+        throw std::runtime_error("vkCreateImageView (depth) failed");
+    }
+}
+
+void VulkanRenderer::destroyDepthResources()
+{
+    if (m_depthView)   { vkDestroyImageView(m_device, m_depthView,  nullptr); m_depthView   = VK_NULL_HANDLE; }
+    if (m_depthImage)  { vkDestroyImage    (m_device, m_depthImage, nullptr); m_depthImage  = VK_NULL_HANDLE; }
+    if (m_depthMemory) { vkFreeMemory      (m_device, m_depthMemory, nullptr); m_depthMemory = VK_NULL_HANDLE; }
+    m_depthExtent = { 0, 0 };
+    m_depthUsage  = 0;
+    m_depthFormat = VK_FORMAT_UNDEFINED;
+}
+
 void VulkanRenderer::createFramebuffers()
 {
     VkExtent2D extent = m_pSwapchain->getExtent();
     uint32_t count    = m_pSwapchain->getImageCount();
     m_framebuffers.resize(count);
     for (uint32_t i = 0; i < count; ++i) {
-        VkImageView attach = m_pSwapchain->getImageView(i);
+        VkImageView attach[2] = { m_pSwapchain->getImageView(i), m_depthView };
         VkFramebufferCreateInfo fbi = { VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };
         fbi.renderPass      = m_renderPass;
-        fbi.attachmentCount = 1;
-        fbi.pAttachments    = &attach;
+        fbi.attachmentCount = 2;
+        fbi.pAttachments    = attach;
         fbi.width           = extent.width;
         fbi.height          = extent.height;
         fbi.layers          = 1;
@@ -408,6 +515,15 @@ void VulkanRenderer::createMeshPipeline()
     ds.dynamicStateCount = 2;
     ds.pDynamicStates    = dyn;
 
+    // Mesh depth/stencil: mirror the D3D12 default (DepthEnable=TRUE,
+    // DepthWriteMask=ALL, DepthFunc=LESS, StencilEnable=FALSE).
+    VkPipelineDepthStencilStateCreateInfo dss = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
+    dss.depthTestEnable       = VK_TRUE;
+    dss.depthWriteEnable      = VK_TRUE;
+    dss.depthCompareOp        = VK_COMPARE_OP_LESS;
+    dss.depthBoundsTestEnable = VK_FALSE;
+    dss.stencilTestEnable     = VK_FALSE;
+
     VkGraphicsPipelineCreateInfo gpci = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
     gpci.stageCount          = 2;
     gpci.pStages             = stages;
@@ -416,6 +532,7 @@ void VulkanRenderer::createMeshPipeline()
     gpci.pViewportState      = &vp;
     gpci.pRasterizationState = &rs;
     gpci.pMultisampleState   = &ms;
+    gpci.pDepthStencilState  = &dss;
     gpci.pColorBlendState    = &cb;
     gpci.pDynamicState       = &ds;
     gpci.layout              = m_meshPipelineLayout;
@@ -500,6 +617,17 @@ void VulkanRenderer::createTextPipeline()
     ds.dynamicStateCount = 2;
     ds.pDynamicStates    = dyn;
 
+    // Text depth/stencil: disabled — text is an overlay drawn after the mesh
+    // pass. Mirrors the D3D12 text PSO (DepthEnable=FALSE, WriteMask=ZERO,
+    // Func=ALWAYS, StencilEnable=FALSE). Required as an explicit struct now
+    // that the render pass declares a depth attachment.
+    VkPipelineDepthStencilStateCreateInfo dss = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
+    dss.depthTestEnable       = VK_FALSE;
+    dss.depthWriteEnable      = VK_FALSE;
+    dss.depthCompareOp        = VK_COMPARE_OP_ALWAYS;
+    dss.depthBoundsTestEnable = VK_FALSE;
+    dss.stencilTestEnable     = VK_FALSE;
+
     VkGraphicsPipelineCreateInfo gpci = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
     gpci.stageCount          = 2;
     gpci.pStages             = stages;
@@ -508,6 +636,7 @@ void VulkanRenderer::createTextPipeline()
     gpci.pViewportState      = &vp;
     gpci.pRasterizationState = &rs;
     gpci.pMultisampleState   = &ms;
+    gpci.pDepthStencilState  = &dss;
     gpci.pColorBlendState    = &cb;
     gpci.pDynamicState       = &ds;
     gpci.layout              = m_textPipelineLayout;
@@ -539,6 +668,10 @@ void VulkanRenderer::destroyPipelineResources()
 
     for (auto fb : m_framebuffers) if (fb) vkDestroyFramebuffer(m_device, fb, nullptr);
     m_framebuffers.clear();
+    // Framebuffers reference m_depthView, so destroy them first, then drop
+    // the depth image/memory/view, then the render pass that declared the
+    // depth attachment description.
+    destroyDepthResources();
     if (m_renderPass) vkDestroyRenderPass(m_device, m_renderPass, nullptr);
 
     m_textPipeline       = VK_NULL_HANDLE;
@@ -645,11 +778,13 @@ box3 VulkanRenderer::render(IQuery* query)
 
     updateTransformCB();
 
-    VkClearValue clearValue = {};
-    clearValue.color.float32[0] = m_config.clearColor.x;
-    clearValue.color.float32[1] = m_config.clearColor.y;
-    clearValue.color.float32[2] = m_config.clearColor.z;
-    clearValue.color.float32[3] = m_config.clearColor.w;
+    VkClearValue clearValues[2] = {};
+    clearValues[0].color.float32[0] = m_config.clearColor.x;
+    clearValues[0].color.float32[1] = m_config.clearColor.y;
+    clearValues[0].color.float32[2] = m_config.clearColor.z;
+    clearValues[0].color.float32[3] = m_config.clearColor.w;
+    clearValues[1].depthStencil.depth   = 1.0f;
+    clearValues[1].depthStencil.stencil = 0;
 
     VkExtent2D extent = m_pSwapchain->getExtent();
 
@@ -658,8 +793,8 @@ box3 VulkanRenderer::render(IQuery* query)
     rpBegin.framebuffer       = m_framebuffers[m_currentImageIndex];
     rpBegin.renderArea.offset = { 0, 0 };
     rpBegin.renderArea.extent = extent;
-    rpBegin.clearValueCount   = 1;
-    rpBegin.pClearValues      = &clearValue;
+    rpBegin.clearValueCount   = 2;
+    rpBegin.pClearValues      = clearValues;
     vkCmdBeginRenderPass(cmd, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
 
     VkViewport viewport = { 0.0f, 0.0f, float(extent.width), float(extent.height), 0.0f, 1.0f };

@@ -58,12 +58,26 @@ public:
 
     IWindow* getWindow() const override;
 
+    // Depth-buffer accessors. The renderer owns a per-frame depth image
+    // attached to its render pass; SL Frame Generation needs to tag it as
+    // sl::kBufferTypeDepth via slSetTagForFrame, which requires the full
+    // VkImage + VkImageView + format + extent + usage set (sl::Resource
+    // on Vulkan demands view + the createInfo-derived metadata).
+    VkImage           getDepthImage()  const { return m_depthImage; }
+    VkImageView       getDepthView()   const { return m_depthView; }
+    VkDeviceMemory    getDepthMemory() const { return m_depthMemory; }
+    VkFormat          getDepthFormat() const { return m_depthFormat; }
+    VkExtent2D        getDepthExtent() const { return m_depthExtent; }
+    VkImageUsageFlags getDepthUsage()  const { return m_depthUsage; }
+
 private:
     static constexpr uint32_t kFramesInFlight = 2;
 
     void initFrameResources();
     void destroyFrameResources();
     void createRenderPass();
+    void createDepthResources();
+    void destroyDepthResources();
     void createFramebuffers();
     void createDescriptorResources();
     void createUniformBuffers();
@@ -88,6 +102,18 @@ private:
     // Render pass + per-image framebuffers
     VkRenderPass                 m_renderPass = VK_NULL_HANDLE;
     std::vector<VkFramebuffer>   m_framebuffers;
+
+    // Single depth image shared across frames-in-flight. Lives between
+    // createRenderPass() (which declares the depth attachment) and
+    // createFramebuffers() (which attaches the depth view). DLSS-G needs
+    // the full VkImage / VkImageView / format / usage metadata when the
+    // resource is tagged via slSetTagForFrame on the Vulkan path.
+    VkImage           m_depthImage  = VK_NULL_HANDLE;
+    VkDeviceMemory    m_depthMemory = VK_NULL_HANDLE;
+    VkImageView       m_depthView   = VK_NULL_HANDLE;
+    VkFormat          m_depthFormat = VK_FORMAT_UNDEFINED;
+    VkExtent2D        m_depthExtent = { 0, 0 };
+    VkImageUsageFlags m_depthUsage  = 0;
 
     // Shared descriptor pool large enough for mesh + text descriptor sets.
     VkDescriptorPool             m_descriptorPool = VK_NULL_HANDLE;
