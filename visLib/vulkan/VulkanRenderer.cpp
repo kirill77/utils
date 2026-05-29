@@ -507,12 +507,14 @@ void VulkanRenderer::createMeshPipeline()
     VkPipelineRasterizationStateCreateInfo rs = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
     rs.polygonMode = m_config.wireframeMode ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
     rs.cullMode    = VK_CULL_MODE_BACK_BIT;
-    // Vulkan's frontFace is the signed area in *framebuffer* space (Y-down).
-    // After our projection Y-flip in updateTransformCB, a D3D12-CW visual triangle
-    // produces a POSITIVE framebuffer shoelace, which Vulkan labels CCW. So
-    // accepting D3D12-shaped data (CW front per FrontCounterClockwise=FALSE)
-    // requires FRONT_FACE_COUNTER_CLOCKWISE here.
-    rs.frontFace   = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    // D3D12 treats CW (in its Y-down screen space) as front and culls back
+    // (FrontCounterClockwise=FALSE). We apply a projection Y-flip in
+    // updateTransformCB so NDC Y matches D3D12 — but that flip also negates the
+    // framebuffer-space signed area, so the camera-facing triangles that D3D12
+    // calls CW remain CW in Vulkan's framebuffer space here. Empirically,
+    // FRONT_FACE_COUNTER_CLOCKWISE culled the entire (visible) scene; the
+    // camera-facing faces are CW, so front must be CLOCKWISE to match D3D12.
+    rs.frontFace   = VK_FRONT_FACE_CLOCKWISE;
     rs.lineWidth   = 1.0f;
 
     VkPipelineMultisampleStateCreateInfo ms = { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
@@ -736,14 +738,21 @@ void VulkanRenderer::renderMeshNode(VkCommandBuffer cmd, const MeshNode& node,
         auto pVkMesh = std::dynamic_pointer_cast<VulkanMesh>(pMesh);
         if (!pVkMesh || pVkMesh->isEmpty()) continue;
 
-        // Push constants: row-major 4x4 world matrix derived from affine3 + per-object iter count.
+        // World matrix push constant. The shader reads `matrix World` with
+        // HLSL's default column-major storage (no -Zpr / row_major), so the
+        // translation must land in memory column 3 (indices 12..15) for
+        // mul(World, pos) to translate xyz — exactly as the D3D12 path packs
+        // its XMMATRIX (D3D12Renderer.cpp). The previous layout put the
+        // translation in the bottom row (indices 3/7/11) and zeros in column 3,
+        // which dropped the translation from xyz and corrupted w, clipping every
+        // mesh off-screen on Vulkan. Pack byte-identical to D3D12 instead.
         MeshPushConstants pc = {};
         const auto& m = worldTransform.m_linear;
         const auto& t = worldTransform.m_translation;
-        pc.world[ 0] = m.m00; pc.world[ 1] = m.m10; pc.world[ 2] = m.m20; pc.world[ 3] = t.x;
-        pc.world[ 4] = m.m01; pc.world[ 5] = m.m11; pc.world[ 6] = m.m21; pc.world[ 7] = t.y;
-        pc.world[ 8] = m.m02; pc.world[ 9] = m.m12; pc.world[10] = m.m22; pc.world[11] = t.z;
-        pc.world[12] = 0.0f;  pc.world[13] = 0.0f;  pc.world[14] = 0.0f;  pc.world[15] = 1.0f;
+        pc.world[ 0] = m.m00; pc.world[ 1] = m.m01; pc.world[ 2] = m.m02; pc.world[ 3] = 0.0f;
+        pc.world[ 4] = m.m10; pc.world[ 5] = m.m11; pc.world[ 6] = m.m12; pc.world[ 7] = 0.0f;
+        pc.world[ 8] = m.m20; pc.world[ 9] = m.m21; pc.world[10] = m.m22; pc.world[11] = 0.0f;
+        pc.world[12] = t.x;   pc.world[13] = t.y;   pc.world[14] = t.z;   pc.world[15] = 1.0f;
         pc.iterationCount = node.getPixelShaderIterations();
 
         vkCmdPushConstants(cmd, m_meshPipelineLayout,
