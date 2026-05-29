@@ -52,7 +52,10 @@ public:
     void flush() override;
 
     const RendererConfig& getConfig() const override { return m_config; }
-    void setConfig(const RendererConfig& config) override { m_config = config; }
+    // Stores the config; if vsyncInterval changed, rebuilds the swapchain so
+    // the new present mode takes effect (D3D12 applies vsync per-Present, but
+    // Vulkan bakes the present mode into the swapchain at creation).
+    void setConfig(const RendererConfig& config) override;
 
     std::shared_ptr<IQuery> createQuery(QueryCapability capabilities, uint32_t slotCount = 128) override;
 
@@ -75,6 +78,7 @@ private:
 
     void initFrameResources();
     void destroyFrameResources();
+    void recreateSwapchain();
     void createRenderPass();
     void createDepthResources();
     void destroyDepthResources();

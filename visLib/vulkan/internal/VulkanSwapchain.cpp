@@ -26,11 +26,38 @@ VkSurfaceFormatKHR pickSurfaceFormat(VkPhysicalDevice pd, VkSurfaceKHR surface)
                            : formats[0];
 }
 
+// Map RendererConfig::vsyncInterval to a Vulkan present mode, validated
+// against what the surface actually supports. FIFO is the one mode Vulkan
+// guarantees, so it's always the safe fallback.
+//   0  -> uncapped: IMMEDIATE (tearing, matches DXGI syncInterval 0) if
+//         available, else MAILBOX (uncapped, no tearing), else FIFO.
+//   >=1 -> FIFO (vsync, present every vblank). DXGI's "every Nth vblank"
+//         for N>=2 has no native Vulkan analog and is gated out upstream;
+//         if one slips through it lands on FIFO here.
+VkPresentModeKHR pickPresentMode(VkPhysicalDevice pd, VkSurfaceKHR surface, int vsyncInterval)
+{
+    uint32_t count = 0;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(pd, surface, &count, nullptr);
+    std::vector<VkPresentModeKHR> modes(count);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(pd, surface, &count, modes.data());
+
+    auto has = [&](VkPresentModeKHR m) {
+        return std::find(modes.begin(), modes.end(), m) != modes.end();
+    };
+
+    if (vsyncInterval <= 0) {
+        if (has(VK_PRESENT_MODE_IMMEDIATE_KHR)) return VK_PRESENT_MODE_IMMEDIATE_KHR;
+        if (has(VK_PRESENT_MODE_MAILBOX_KHR))   return VK_PRESENT_MODE_MAILBOX_KHR;
+    }
+    return VK_PRESENT_MODE_FIFO_KHR;  // always supported per spec
+}
+
 } // namespace
 
-VulkanSwapchain::VulkanSwapchain(VulkanWindow* pWindow)
+VulkanSwapchain::VulkanSwapchain(VulkanWindow* pWindow, int vsyncInterval)
     : m_pWindow(pWindow)
     , m_device(pWindow->getDevice())
+    , m_vsyncInterval(vsyncInterval)
 {
     const auto& ov = pWindow->getOverrides();
     m_pfnCreateSwapchain    = ov.pfnVkCreateSwapchainKHR    ? ov.pfnVkCreateSwapchainKHR    : &vkCreateSwapchainKHR;
@@ -84,7 +111,7 @@ void VulkanSwapchain::create()
     ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     ci.preTransform     = caps.currentTransform;
     ci.compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    ci.presentMode      = VK_PRESENT_MODE_FIFO_KHR;
+    ci.presentMode      = pickPresentMode(pd, surface, m_vsyncInterval);
     ci.clipped          = VK_TRUE;
     ci.oldSwapchain     = VK_NULL_HANDLE;
 
@@ -126,6 +153,13 @@ void VulkanSwapchain::destroy()
         m_pfnDestroySwapchain(m_device, m_swapchain, nullptr);
         m_swapchain = VK_NULL_HANDLE;
     }
+}
+
+void VulkanSwapchain::recreate(int vsyncInterval)
+{
+    m_vsyncInterval = vsyncInterval;
+    destroy();
+    create();
 }
 
 uint32_t VulkanSwapchain::acquireNextImage(VkSemaphore signalSemaphore, VkResult& outResult)

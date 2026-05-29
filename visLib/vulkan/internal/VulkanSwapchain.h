@@ -11,15 +11,26 @@ namespace visLib {
 class VulkanWindow;
 
 // VulkanSwapchain - Manages a VkSwapchainKHR plus per-image views.
-// Step 2b scope: create once, no resize handling yet.
+// The present mode is derived from vsyncInterval (see pickPresentMode in the
+// .cpp): 0 -> IMMEDIATE/MAILBOX (uncapped), >=1 -> FIFO (vsync). recreate()
+// rebuilds the swapchain when the present mode needs to change.
 class VulkanSwapchain
 {
 public:
-    explicit VulkanSwapchain(VulkanWindow* pWindow);
+    // vsyncInterval mirrors RendererConfig::vsyncInterval: 0 = no wait,
+    // 1 = every vblank. (>=2 has no Vulkan present-mode equivalent and is
+    // gated out before reaching here; it falls back to FIFO if it ever does.)
+    VulkanSwapchain(VulkanWindow* pWindow, int vsyncInterval);
     ~VulkanSwapchain();
 
     VulkanSwapchain(const VulkanSwapchain&) = delete;
     VulkanSwapchain& operator=(const VulkanSwapchain&) = delete;
+
+    // Tear down and rebuild the swapchain + image views with a new present
+    // mode. The caller owns anything that references the old image views
+    // (e.g. framebuffers) and must rebuild those afterwards, and must ensure
+    // the device is idle first.
+    void recreate(int vsyncInterval);
 
     // Acquire next swapchain image. Returns the image index (caller passes
     // outResult to inspect VK_ERROR_OUT_OF_DATE_KHR / VK_SUBOPTIMAL_KHR).
@@ -56,6 +67,7 @@ private:
     std::vector<VkImageView> m_imageViews;
     VkFormat                 m_format = VK_FORMAT_UNDEFINED;
     VkExtent2D               m_extent = { 0, 0 };
+    int                      m_vsyncInterval = 1;
 };
 
 } // namespace visLib

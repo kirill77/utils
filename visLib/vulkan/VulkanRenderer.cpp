@@ -9,6 +9,7 @@
 #include "utils/visLib/include/IVisObject.h"
 #include "utils/visLib/common/QRCode.h"
 #include "internal/g_EmbeddedSpirvShaders.h"
+#include "utils/log/ILog.h"
 #include <stdexcept>
 #include <cstring>
 
@@ -39,6 +40,20 @@ void writeMatrix(float (&dst)[16], const float4x4& m) {
     dst[ 4] = m.row1.x; dst[ 5] = m.row1.y; dst[ 6] = m.row1.z; dst[ 7] = m.row1.w;
     dst[ 8] = m.row2.x; dst[ 9] = m.row2.y; dst[10] = m.row2.z; dst[11] = m.row2.w;
     dst[12] = m.row3.x; dst[13] = m.row3.y; dst[14] = m.row3.z; dst[15] = m.row3.w;
+}
+
+// Map RendererConfig::pixelShader (a D3D12-style HLSL filename) to the
+// embedded SPIR-V module name. Only the QR-code scene shader is ported to
+// SPIR-V — which is the only pixel shader the slVerdict matrix ever selects
+// (RendererApp sets "QRCodePixelShader"). Anything else has no Vulkan port,
+// so we warn and fall back rather than silently ignoring the config.
+std::string toSpirvPixelShaderName(const std::string& configName) {
+    if (configName == "QRCodePixelShader" || configName == "QRCodePS") {
+        return "QRCodePS";
+    }
+    LOG_WARN("Vulkan backend has no SPIR-V port of pixel shader '%s'; using QRCodePS",
+             configName.c_str());
+    return "QRCodePS";
 }
 
 VkShaderModule createShaderModule(VkDevice device, const std::string& name) {
@@ -109,7 +124,7 @@ VulkanRenderer::VulkanRenderer(VulkanWindow* pWindow, const RendererConfig& conf
     , m_device(pWindow->getDevice())
     , m_queue(pWindow->getGraphicsQueue())
 {
-    m_pSwapchain = std::make_unique<VulkanSwapchain>(pWindow);
+    m_pSwapchain = std::make_unique<VulkanSwapchain>(pWindow, m_config.vsyncInterval);
     createRenderPass();
     createDepthResources();
     createFramebuffers();
@@ -448,7 +463,7 @@ void VulkanRenderer::createMeshPipeline()
     }
 
     VkShaderModule vs = createShaderModule(m_device, "MeshVS");
-    VkShaderModule ps = createShaderModule(m_device, "QRCodePS");
+    VkShaderModule ps = createShaderModule(m_device, toSpirvPixelShaderName(m_config.pixelShader));
 
     VkPipelineShaderStageCreateInfo stages[2] = {};
     stages[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -870,6 +885,41 @@ void VulkanRenderer::flush()
         auto fnWaitIdle = ov.pfnVkDeviceWaitIdle ? ov.pfnVkDeviceWaitIdle : &vkDeviceWaitIdle;
         fnWaitIdle(m_device);
     }
+}
+
+void VulkanRenderer::setConfig(const RendererConfig& config)
+{
+    const bool vsyncChanged = (config.vsyncInterval != m_config.vsyncInterval);
+    m_config = config;
+    if (vsyncChanged) {
+        recreateSwapchain();
+    }
+}
+
+void VulkanRenderer::recreateSwapchain()
+{
+    // Drain the device before touching swapchain-bound resources. In the
+    // normal slVerdict flow this never fires: RendererApp seeds the renderer
+    // config with the test's vsyncInterval before construction, so the first
+    // swapchain already has the right present mode and the beginTest setConfig
+    // is a no-op. This path exists to honor the IRenderer contract if vsync is
+    // changed after construction. (Note: SL's VK_NV_low_latency2 hooks are
+    // installed against the swapchain in configureReflexAfterSwapchain, so a
+    // post-Reflex recreate would need Reflex reconfigured — hence we rely on
+    // the construction-time seed rather than this path in practice.)
+    flush();
+
+    for (auto fb : m_framebuffers) {
+        if (fb) vkDestroyFramebuffer(m_device, fb, nullptr);
+    }
+    m_framebuffers.clear();
+
+    m_pSwapchain->recreate(m_config.vsyncInterval);
+
+    // Depth resources are sized to the (unchanged) extent and the render pass
+    // references the (unchanged) surface format, so only the framebuffers —
+    // which bind the new swapchain image views — need rebuilding.
+    createFramebuffers();
 }
 
 std::shared_ptr<IMesh> VulkanRenderer::createMesh()
