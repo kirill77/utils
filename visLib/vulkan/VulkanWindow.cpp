@@ -12,16 +12,32 @@ namespace {
 
 const char* kKhronosValidationLayer = "VK_LAYER_KHRONOS_validation";
 
-bool hasInstanceLayer(const char* name)
+// Minimum Khronos validation-layer spec version we'll enable alongside DLSS-G
+// Frame Generation. DLSS-G's snippet (nvngx_dlssg) chains a
+// VkCuModuleTexturingModeCreateInfoNVX onto vkCreateCuModuleNVX's pNext, which
+// was added in VK_NVX_binary_import revision 2 (Khronos-published 2024-11-04).
+// Older validation layers (e.g. Vulkan SDK 1.3.296) don't recognize the struct,
+// flag "VkCuModuleCreateInfoNVX-pNext must be NULL", mishandle the chain, and
+// crash FG deep inside NVSDK_NGX_VULKAN_EvaluateFeature. Rev 2 ships in the
+// 1.4.x SDK line, so we require >= 1.4.0 and otherwise skip validation rather
+// than risk the crash. (Conservative — a late-1.3.x layer may also carry rev 2;
+// lower this if you confirm a specific older layer is safe.)
+// Note: VK_API_VERSION_1_4 isn't defined by the 1.3.296 headers this builds
+// against, so spell the threshold out with VK_MAKE_API_VERSION.
+constexpr uint32_t kMinValidationLayerSpecVersion = VK_MAKE_API_VERSION(0, 1, 4, 0);
+
+// Spec version (VK_MAKE_API_VERSION-encoded) of the named instance layer, or 0
+// if the layer isn't present.
+uint32_t instanceLayerSpecVersion(const char* name)
 {
     uint32_t count = 0;
     vkEnumerateInstanceLayerProperties(&count, nullptr);
     std::vector<VkLayerProperties> layers(count);
     vkEnumerateInstanceLayerProperties(&count, layers.data());
     for (const auto& l : layers) {
-        if (strcmp(l.layerName, name) == 0) return true;
+        if (strcmp(l.layerName, name) == 0) return l.specVersion;
     }
-    return false;
+    return 0;
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL debugMessengerCallback(
@@ -116,10 +132,23 @@ void VulkanWindow::initVulkan(const VulkanWindowConfig& vkConfig)
 
     std::vector<const char*> instanceLayers;
     bool wantDebugUtils = false;
-    if (vkConfig.enableValidation && hasInstanceLayer(kKhronosValidationLayer)) {
+    const uint32_t valLayerVer =
+        vkConfig.enableValidation ? instanceLayerSpecVersion(kKhronosValidationLayer) : 0;
+    if (vkConfig.enableValidation && valLayerVer >= kMinValidationLayerSpecVersion) {
         instanceLayers.push_back(kKhronosValidationLayer);
         instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         wantDebugUtils = true;
+        fprintf(stderr, "[visLib] Vulkan validation enabled (VK_LAYER_KHRONOS_validation %u.%u.%u).\n",
+                VK_API_VERSION_MAJOR(valLayerVer), VK_API_VERSION_MINOR(valLayerVer), VK_API_VERSION_PATCH(valLayerVer));
+    } else if (vkConfig.enableValidation && valLayerVer == 0) {
+        fprintf(stderr, "[visLib] Vulkan validation requested but VK_LAYER_KHRONOS_validation not found; continuing without it.\n");
+    } else if (vkConfig.enableValidation) {
+        fprintf(stderr,
+                "[visLib] Skipping VK_LAYER_KHRONOS_validation: layer %u.%u.%u is older than required %u.%u.%u. "
+                "Older layers mishandle DLSS-G's VK_NVX_binary_import rev2 pNext and crash Frame Generation; "
+                "install Vulkan SDK >= 1.4.x to enable validation.\n",
+                VK_API_VERSION_MAJOR(valLayerVer), VK_API_VERSION_MINOR(valLayerVer), VK_API_VERSION_PATCH(valLayerVer),
+                VK_API_VERSION_MAJOR(kMinValidationLayerSpecVersion), VK_API_VERSION_MINOR(kMinValidationLayerSpecVersion), VK_API_VERSION_PATCH(kMinValidationLayerSpecVersion));
     }
 
     VkApplicationInfo appInfo = { VK_STRUCTURE_TYPE_APPLICATION_INFO };
