@@ -155,8 +155,19 @@ bool VulkanQuery::getTimestampResult(TimestampQueryResult& outResult)
         outResult.endTimestamp   = m_tsResults[slotIdx * 2 + 1];
         outResult.frequency      = m_tsFrequency;
 
-        // Recycle slot. The underlying pool ranges are reset on the GPU in
-        // beginInternal via vkCmdResetQueryPool the next time this slot is used.
+        // Recycle slot. Reset the pool range on the CPU now (mirrors the
+        // pipeline-stats path and D3D12's readback-sentinel zeroing) so these
+        // results stop being "available". Without this, the next reuse's
+        // GPU-side vkCmdResetQueryPool is deferred until the command buffer
+        // executes — and any updateSlotStates() poll in that window would read
+        // these stale-but-available timestamps and mis-attribute an old GPU
+        // time to a newer frame (the Vulkan GpuLoadTuner divergence). The slot
+        // already completed on the GPU (we just read it), so resetting here is
+        // safe; beginInternal still issues vkCmdResetQueryPool to cover a
+        // slot's very first (never-recycled) use.
+        if (m_tsPool != VK_NULL_HANDLE) {
+            vkResetQueryPool(m_device, m_tsPool, slotIdx * 2, 2);
+        }
         slot.state = SlotState::Free;
 
         if (slotIdx == m_oldestPendingSlot) {

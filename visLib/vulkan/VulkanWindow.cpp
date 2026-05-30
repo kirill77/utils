@@ -292,6 +292,12 @@ void VulkanWindow::initVulkan(const VulkanWindowConfig& vkConfig)
     VkPhysicalDeviceVulkan12Features want12 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
     want12.timelineSemaphore   = supported12.timelineSemaphore;
     want12.bufferDeviceAddress = supported12.bufferDeviceAddress;
+    // hostQueryReset lets VulkanQuery invalidate a slot's query results on the
+    // CPU when it recycles the slot (vkResetQueryPool). Without it, recycled
+    // timestamp slots keep their previous values *available* in the pool, so a
+    // poll that races ahead of the deferred GPU-side reset reads stale data and
+    // GPU times get attributed to the wrong frame (see VulkanQuery.cpp).
+    want12.hostQueryReset      = supported12.hostQueryReset;
     want12.pNext = &want13;
 
     VkPhysicalDeviceFeatures2 want2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
