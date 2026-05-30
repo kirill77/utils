@@ -143,19 +143,36 @@ std::unique_ptr<FrameViewRunner> FrameViewRunner::create(std::string& outError)
         }
         LOG_INFO("FrameViewRunner: Found FrameView at: %s", frameViewInstallPath.string().c_str());
 
+        // We drive FrameView's capture engine (PresentMon_x64.exe) directly,
+        // bypassing the FrameView_x64.exe GUI/orchestrator. PresentMon runs
+        // in-place from the installation's bin\ directory, so no copy is needed.
+        // CSVs are written to m_outputDirectory in multi-CSV mode (one file per
+        // captured process), exactly where findLatestCsvForApp() looks for them.
         std::filesystem::path tempBase = getTempBasePath();
-        runner->m_frameViewCopyPath = tempBase / "FrameView";
         runner->m_outputDirectory = tempBase / "Results";
 
-        if (!runner->prepareFrameViewCopy(frameViewInstallPath, outError)) {
+        std::error_code ec;
+        std::filesystem::create_directories(runner->m_outputDirectory, ec);
+        if (ec) {
+            outError = "Failed to create output directory: " + ec.message();
+            LOG_ERROR("FrameViewRunner: %s", outError.c_str());
             return nullptr;
         }
 
-        if (!runner->modifyIniFile(outError)) {
-            return nullptr;
+        // Clean up any leftover CSVs from previous runs so findLatestCsvForApp
+        // never returns a stale file.
+        int removedCsvs = 0;
+        for (const auto& entry : std::filesystem::directory_iterator(runner->m_outputDirectory)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".csv") {
+                std::filesystem::remove(entry.path(), ec);
+                ++removedCsvs;
+            }
+        }
+        if (removedCsvs > 0) {
+            LOG_INFO("FrameViewRunner: Removed %d leftover CSV file(s) from results directory", removedCsvs);
         }
 
-        if (!runner->launchFrameView(outError)) {
+        if (!runner->launchPresentMon(outError)) {
             return nullptr;
         }
 
@@ -253,164 +270,92 @@ void FrameViewRunner::killFrameViewProcesses()
     LOG_INFO("FrameViewRunner: Process cleanup completed");
 }
 
-bool FrameViewRunner::prepareFrameViewCopy(const std::filesystem::path& sourceDir, std::string& outError)
+bool FrameViewRunner::launchPresentMon(std::string& outError)
 {
-    LOG_INFO("FrameViewRunner: Preparing FrameView copy...");
-
-    try {
-        // Remove existing copy if present
-        // Retry a few times because terminated processes may still hold file locks briefly
-        if (std::filesystem::exists(m_frameViewCopyPath)) {
-            constexpr int maxRetries = 5;
-            constexpr int retryDelayMs = 500;
-            std::error_code ec;
-            for (int attempt = 0; attempt < maxRetries; ++attempt) {
-                std::uintmax_t removedCount = std::filesystem::remove_all(m_frameViewCopyPath, ec);
-                if (!ec) {
-                    LOG_INFO("FrameViewRunner: Removed existing copy (%llu items)", removedCount);
-                    break;
-                }
-                LOG_INFO("FrameViewRunner: remove_all attempt %d/%d failed: %s - retrying in %dms...",
-                         attempt + 1, maxRetries, ec.message().c_str(), retryDelayMs);
-                std::this_thread::sleep_for(std::chrono::milliseconds(retryDelayMs));
-            }
-            if (ec) {
-                outError = std::string("Failed to remove existing FrameView copy after ") +
-                           std::to_string(maxRetries) + " attempts: " + ec.message();
-                LOG_ERROR("FrameViewRunner: %s", outError.c_str());
-                return false;
-            }
-        }
-
-        // Create fresh directories
-        std::filesystem::create_directories(m_frameViewCopyPath);
-        std::filesystem::create_directories(m_outputDirectory);
-
-        // Clean up any leftover CSVs from previous runs
-        int removedCsvs = 0;
-        for (const auto& entry : std::filesystem::directory_iterator(m_outputDirectory)) {
-            if (entry.is_regular_file() && entry.path().extension() == ".csv") {
-                std::filesystem::remove(entry.path());
-                ++removedCsvs;
-            }
-        }
-        if (removedCsvs > 0) {
-            LOG_INFO("FrameViewRunner: Removed %d leftover CSV file(s) from results directory", removedCsvs);
-        }
-
-        LOG_INFO("FrameViewRunner: Copying FrameView from: %s", sourceDir.string().c_str());
-        LOG_INFO("FrameViewRunner: Copying FrameView to: %s", m_frameViewCopyPath.string().c_str());
-
-        for (const auto& entry : std::filesystem::recursive_directory_iterator(sourceDir)) {
-            const auto& sourcePath = entry.path();
-            auto relativePath = std::filesystem::relative(sourcePath, sourceDir);
-            auto destPath = m_frameViewCopyPath / relativePath;
-
-            if (entry.is_directory()) {
-                std::filesystem::create_directories(destPath);
-            } else if (entry.is_regular_file()) {
-                std::filesystem::create_directories(destPath.parent_path());
-                std::filesystem::copy_file(sourcePath, destPath, 
-                                           std::filesystem::copy_options::overwrite_existing);
-            }
-        }
-
-        LOG_INFO("FrameViewRunner: Successfully copied FrameView");
-        return true;
-
-    } catch (const std::filesystem::filesystem_error& e) {
-        outError = std::string("Failed to copy FrameView: ") + e.what();
+    // FrameView's capture engine lives in the installation's bin\ directory.
+    std::filesystem::path presentMonExe = m_installPath / "bin" / "PresentMon_x64.exe";
+    if (!std::filesystem::exists(presentMonExe)) {
+        outError = "PresentMon_x64.exe not found at: " + presentMonExe.string();
         LOG_ERROR("FrameViewRunner: %s", outError.c_str());
         return false;
     }
-}
 
-bool FrameViewRunner::modifyIniFile(std::string& outError)
-{
-    LOG_INFO("FrameViewRunner: Modifying Settings.ini...");
+    // Resident, unattended capture driven without the FrameView_x64.exe GUI
+    // (which crashes in its WndProc on some configurations). Argument notes:
+    //   -spawnconsumer        Consume ETW and write the CSV. REQUIRED: the CSV
+    //                         path is gated behind this in PresentMon.
+    //   -frameview            Emit the FrameView column set (incl. MsPCLatency).
+    //   -multi_csv            One CSV per captured process; findLatestCsvForApp()
+    //                         matches the per-test renderer by its exe name. Files
+    //                         are named FrameView_<proc>_<timestamp>_Log.csv.
+    //   -output_file ...\FrameView.csv   Only the *basename* is honored in
+    //                         FrameView mode; the directory is ignored (see below).
+    //   -session_name FrameView   REQUIRED VERBATIM: PresentMon selects its
+    //                         FrameView capture mode from this exact session name;
+    //                         any other name fails its shared-memory init.
+    //   -stop_existing_session    Clear a stale "FrameView" ETW session first.
+    //   -dont_restart_as_admin    Don't self-elevate; inherit slVerdict's token.
+    // With no -hotkey/-timed, PresentMon auto-starts recording on launch and
+    // records until terminated (the destructor kills it via killFrameViewProcesses).
+    // NOTE: PresentMon's ETW consumer needs admin rights, so slVerdict must run
+    // elevated; otherwise the process launches but produces no CSV.
+    //
+    // CWD: in FrameView mode PresentMon ignores the directory of -output_file and
+    // writes its per-process CSVs to its current working directory. We therefore
+    // launch it with the working directory set to m_outputDirectory so the CSVs
+    // land exactly where findLatestCsvForApp() looks. (PresentMon's own DLLs still
+    // resolve from the exe's bin\ directory, which is always on the DLL search
+    // path regardless of CWD.) This is why we use CreateProcessW directly rather
+    // than ProcessManager::startProcess, which would force CWD to the exe's dir.
+    const std::wstring exeW = presentMonExe.wstring();
+    const std::wstring csvW = (m_outputDirectory / L"FrameView.csv").wstring();
+    const std::wstring cwdW = m_outputDirectory.wstring();
+    std::wstring cmd = L"\"" + exeW + L"\""
+        L" -spawnconsumer"
+        L" -frameview"
+        L" -multi_csv"
+        L" -output_file \"" + csvW + L"\""
+        L" -session_name FrameView"
+        L" -stop_existing_session"
+        L" -dont_restart_as_admin";
 
-    try {
-        std::filesystem::path settingsIniPath = m_frameViewCopyPath / "Settings.ini";
+    LOG_INFO("FrameViewRunner: Launching PresentMon: %s", presentMonExe.string().c_str());
+    LOG_INFO("FrameViewRunner: PresentMon working directory (CSV output): %s",
+             m_outputDirectory.string().c_str());
 
-        if (!std::filesystem::exists(settingsIniPath)) {
-            outError = "Settings.ini not found at: " + settingsIniPath.string();
-            LOG_ERROR("FrameViewRunner: %s", outError.c_str());
-            return false;
-        }
+    STARTUPINFOW si{};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi{};
 
-        // Use WritePrivateProfileStringW with an absolute path so the write
-        // lands in the correct [Setting] section regardless of CWD.
-        std::wstring iniPathW = settingsIniPath.wstring();
-        std::wstring outputDirW = m_outputDirectory.wstring();
+    // CreateProcessW may modify the command-line buffer, so pass a mutable copy.
+    std::vector<wchar_t> cmdBuf(cmd.begin(), cmd.end());
+    cmdBuf.push_back(L'\0');
 
-        WritePrivateProfileStringW(L"Setting", L"BenchmarkDirectory",
-                                   outputDirW.c_str(), iniPathW.c_str());
-        WritePrivateProfileStringW(L"Setting", L"CaptureOnLaunchDurationInSeconds",
-                                   L"1", iniPathW.c_str());
+    BOOL ok = CreateProcessW(
+        exeW.c_str(),        // lpApplicationName
+        cmdBuf.data(),       // lpCommandLine (mutable)
+        nullptr,             // lpProcessAttributes
+        nullptr,             // lpThreadAttributes
+        FALSE,               // bInheritHandles
+        CREATE_NO_WINDOW,    // dwCreationFlags
+        nullptr,             // lpEnvironment (inherit)
+        cwdW.c_str(),        // lpCurrentDirectory -> drives the CSV output dir
+        &si,
+        &pi);
 
-        LOG_INFO("FrameViewRunner: Setting BenchmarkDirectory=%s",
-                 m_outputDirectory.string().c_str());
-        LOG_INFO("FrameViewRunner: Successfully modified Settings.ini");
-        return true;
-
-    } catch (const std::exception& e) {
-        outError = std::string("Failed to modify Settings.ini: ") + e.what();
+    if (!ok) {
+        DWORD err = GetLastError();
+        outError = "CreateProcess for PresentMon failed (error " + std::to_string(err) + ")";
         LOG_ERROR("FrameViewRunner: %s", outError.c_str());
         return false;
     }
-}
 
-bool FrameViewRunner::launchFrameView(std::string& outError)
-{
-    ProcessManager processManager;
-    std::filesystem::path frameViewExePath = m_frameViewCopyPath / "FrameView_x64.exe";
-
-    LOG_INFO("FrameViewRunner: Launching FrameView from: %s", frameViewExePath.string().c_str());
-
-    try {
-        ProcessManager::ProcessInfo processInfo = processManager.startProcess(
-            frameViewExePath.string(), "");
-        
-        if (processInfo.isValid()) {
-            LOG_INFO("FrameViewRunner: Successfully launched FrameView (PID: %u)", processInfo.id);
-            return true;
-        } else {
-            outError = "Failed to launch FrameView - invalid process info";
-            LOG_ERROR("FrameViewRunner: %s", outError.c_str());
-            return false;
-        }
-
-    } catch (const std::exception& e) {
-        std::string errorMsg = e.what();
-
-        if (errorMsg.find("Error code: 740") != std::string::npos) {
-            LOG_WARN("FrameViewRunner: FrameView requires elevation, attempting elevated launch...");
-
-            try {
-                ProcessManager::ProcessInfo processInfo = processManager.startProcessElevated(
-                    frameViewExePath.string(), "");
-                
-                if (processInfo.isValid()) {
-                    LOG_INFO("FrameViewRunner: Successfully launched FrameView with elevation (PID: %u)", 
-                             processInfo.id);
-                    return true;
-                } else {
-                    outError = "Failed to launch FrameView with elevation - invalid process info";
-                    LOG_ERROR("FrameViewRunner: %s", outError.c_str());
-                    return false;
-                }
-
-            } catch (const std::exception& elevatedError) {
-                outError = std::string("Failed to launch FrameView with elevation: ") + elevatedError.what();
-                LOG_ERROR("FrameViewRunner: %s", outError.c_str());
-                return false;
-            }
-        } else {
-            outError = std::string("Failed to launch FrameView: ") + e.what();
-            LOG_ERROR("FrameViewRunner: %s", outError.c_str());
-            return false;
-        }
-    }
+    LOG_INFO("FrameViewRunner: Successfully launched PresentMon (PID: %u)", pi.dwProcessId);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    return true;
 }
 
 std::filesystem::path FrameViewRunner::findLatestCsvForApp(const std::string& appName)
@@ -453,14 +398,6 @@ std::filesystem::path FrameViewRunner::findLatestCsvForApp(const std::string& ap
     std::filesystem::path latestCsv;
     if (searchDir(m_outputDirectory, latestCsv)) {
         LOG_INFO("FrameViewRunner: Found CSV: %s", latestCsv.string().c_str());
-        return latestCsv;
-    }
-
-    // Fallback: some FrameView versions ignore BenchmarkDirectory and write
-    // CSVs next to their own executable.
-    if (searchDir(m_frameViewCopyPath, latestCsv)) {
-        LOG_WARN("FrameViewRunner: CSV not in Results dir, found in FrameView dir: %s",
-                 latestCsv.string().c_str());
         return latestCsv;
     }
 
