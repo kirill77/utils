@@ -76,7 +76,7 @@ foreach ($file in $hlslFiles) {
         Write-Error "SPIR-V output for $name is empty or not 4-byte aligned (size=$($bytes.Length))"
         exit 1
     }
-    $words = New-Object 'uint[]' ($bytes.Length / 4)
+    $words = New-Object 'System.UInt32[]' ($bytes.Length / 4)
     [Buffer]::BlockCopy($bytes, 0, $words, 0, $bytes.Length)
     $shaders += [PSCustomObject]@{ Name = $name; Words = $words; Profile = $profile }
 }
