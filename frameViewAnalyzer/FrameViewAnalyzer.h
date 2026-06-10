@@ -7,9 +7,10 @@
 struct FrameViewMetrics {
     double avgFrameMs = 0.0;                  // mean(MsBetweenDisplayChange)
     double stddevMs = 0.0;                   // standard deviation of intervals
-    double jitterPct = 0.0;                  // avg(|interval[i] - interval[i-1]| / interval[i-1] * 100)
+    double jitterPct = 0.0;                  // mean(|interval[i] - interval[i-1]|) / mean(interval) * 100
     double avgPcLatencyMs = 0.0;             // mean(MsPCLatency)
-    size_t analyzedFrames = 0;               // number of frames analyzed (after skipping warmup)
+    size_t analyzedFrames = 0;               // number of frames analyzed (after skipping warmup + outlier reject)
+    size_t droppedOutliers = 0;              // intervals discarded as FrameView garbage (> ceiling * median)
 };
 
 class FrameViewAnalyzer {
