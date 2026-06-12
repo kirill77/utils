@@ -1,7 +1,6 @@
 #ifdef _WIN32
 
 #include "VulkanSwapchain.h"
-#include "utils/visLib/vulkan/VulkanWindow.h"
 #include <stdexcept>
 #include <algorithm>
 
@@ -54,12 +53,20 @@ VkPresentModeKHR pickPresentMode(VkPhysicalDevice pd, VkSurfaceKHR surface, int 
 
 } // namespace
 
-VulkanSwapchain::VulkanSwapchain(VulkanWindow* pWindow, int vsyncInterval)
-    : m_pWindow(pWindow)
-    , m_device(pWindow->getDevice())
+VulkanSwapchain::VulkanSwapchain(VkPhysicalDevice physicalDevice,
+                                 VkDevice device,
+                                 VkSurfaceKHR surface,
+                                 const VulkanCreationOverrides& ov,
+                                 uint32_t fallbackWidth,
+                                 uint32_t fallbackHeight,
+                                 int vsyncInterval)
+    : m_physicalDevice(physicalDevice)
+    , m_device(device)
+    , m_surface(surface)
+    , m_fallbackWidth(fallbackWidth)
+    , m_fallbackHeight(fallbackHeight)
     , m_vsyncInterval(vsyncInterval)
 {
-    const auto& ov = pWindow->getOverrides();
     m_pfnCreateSwapchain    = ov.pfnVkCreateSwapchainKHR    ? ov.pfnVkCreateSwapchainKHR    : &vkCreateSwapchainKHR;
     m_pfnDestroySwapchain   = ov.pfnVkDestroySwapchainKHR   ? ov.pfnVkDestroySwapchainKHR   : &vkDestroySwapchainKHR;
     m_pfnGetSwapchainImages = ov.pfnVkGetSwapchainImagesKHR ? ov.pfnVkGetSwapchainImagesKHR : &vkGetSwapchainImagesKHR;
@@ -75,8 +82,8 @@ VulkanSwapchain::~VulkanSwapchain()
 
 void VulkanSwapchain::create()
 {
-    VkPhysicalDevice pd = m_pWindow->getPhysicalDevice();
-    VkSurfaceKHR surface = m_pWindow->getSurface();
+    VkPhysicalDevice pd = m_physicalDevice;
+    VkSurfaceKHR surface = m_surface;
 
     VkSurfaceCapabilitiesKHR caps = {};
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(pd, surface, &caps);
@@ -93,9 +100,9 @@ void VulkanSwapchain::create()
     if (caps.currentExtent.width != UINT32_MAX) {
         m_extent = caps.currentExtent;
     } else {
-        m_extent.width  = std::clamp<uint32_t>(m_pWindow->getWidth(),
+        m_extent.width  = std::clamp<uint32_t>(m_fallbackWidth,
                                                 caps.minImageExtent.width,  caps.maxImageExtent.width);
-        m_extent.height = std::clamp<uint32_t>(m_pWindow->getHeight(),
+        m_extent.height = std::clamp<uint32_t>(m_fallbackHeight,
                                                 caps.minImageExtent.height, caps.maxImageExtent.height);
     }
 

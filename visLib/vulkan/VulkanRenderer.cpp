@@ -8,7 +8,7 @@
 #include "VulkanText.h"
 #include "utils/visLib/include/IVisObject.h"
 #include "utils/visLib/common/QRCode.h"
-#include "internal/g_EmbeddedSpirvShaders.h"
+#include "utils/visLib/vulkan/internal/g_EmbeddedSpirvShaders.h"
 #include "utils/log/ILog.h"
 #include <stdexcept>
 #include <cstring>
@@ -124,7 +124,10 @@ VulkanRenderer::VulkanRenderer(VulkanWindow* pWindow, const RendererConfig& conf
     , m_device(pWindow->getDevice())
     , m_queue(pWindow->getGraphicsQueue())
 {
-    m_pSwapchain = std::make_unique<VulkanSwapchain>(pWindow, m_config.vsyncInterval);
+    m_pSwapchain = std::make_unique<VulkanSwapchain>(
+        pWindow->getPhysicalDevice(), pWindow->getDevice(), pWindow->getSurface(),
+        pWindow->getOverrides(), pWindow->getWidth(), pWindow->getHeight(),
+        m_config.vsyncInterval);
     createRenderPass();
     createDepthResources();
     createFramebuffers();
