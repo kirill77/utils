@@ -8,6 +8,32 @@
 
 namespace visLib {
 
+// Minimal input for VulkanSwapchain. The swapchain declares exactly what it
+// consumes instead of taking the whole window config, so this internal/ class
+// takes no dependency on the parent vulkan/ dir (VulkanCreationOverrides lives
+// in the public VulkanWindowConfig.h). VulkanRenderer projects the relevant
+// fields out of its VulkanWindow's overrides into this desc.
+//   fallbackExtent: window client size, used only when the surface reports an
+//                   undefined currentExtent (rare on Win32).
+//   vsyncInterval mirrors RendererConfig::vsyncInterval: 0 = no wait,
+//                   1 = every vblank. (>=2 has no Vulkan present-mode
+//                   equivalent and is gated out before reaching here; it falls
+//                   back to FIFO if it ever does.)
+//   pfn*:           the 5 swapchain-relevant SL interposer hooks; each is
+//                   resolved against the static vulkan-1 entry when null.
+struct VulkanSwapchainDesc {
+    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+    VkDevice         device         = VK_NULL_HANDLE;
+    VkSurfaceKHR     surface        = VK_NULL_HANDLE;
+    VkExtent2D       fallbackExtent = {};
+    int              vsyncInterval  = 0;
+    PFN_vkCreateSwapchainKHR    pfnCreateSwapchain    = nullptr;
+    PFN_vkDestroySwapchainKHR   pfnDestroySwapchain   = nullptr;
+    PFN_vkGetSwapchainImagesKHR pfnGetSwapchainImages = nullptr;
+    PFN_vkAcquireNextImageKHR   pfnAcquireNextImage   = nullptr;
+    PFN_vkQueuePresentKHR       pfnQueuePresent       = nullptr;
+};
+
 // VulkanSwapchain - Manages a VkSwapchainKHR plus per-image views.
 // The present mode is derived from vsyncInterval (see pickPresentMode in the
 // .cpp): 0 -> IMMEDIATE/MAILBOX (uncapped), >=1 -> FIFO (vsync). recreate()
@@ -15,24 +41,7 @@ namespace visLib {
 class VulkanSwapchain
 {
 public:
-    // Constructed from raw Vulkan primitives (not a VulkanWindow) so this
-    // internal/ class stays free of any dependency on the parent vulkan/ dir.
-    // The caller (VulkanRenderer) pulls these out of its VulkanWindow.
-    //   overrides:      SL interposer hooks; the swapchain-relevant entries are
-    //                   resolved against the static vulkan-1 entries when null.
-    //   fallbackWidth/Height: window client size, used only when the surface
-    //                   reports an undefined currentExtent (rare on Win32).
-    //   vsyncInterval mirrors RendererConfig::vsyncInterval: 0 = no wait,
-    //                   1 = every vblank. (>=2 has no Vulkan present-mode
-    //                   equivalent and is gated out before reaching here; it
-    //                   falls back to FIFO if it ever does.)
-    VulkanSwapchain(VkPhysicalDevice physicalDevice,
-                    VkDevice device,
-                    VkSurfaceKHR surface,
-                    const VulkanCreationOverrides& overrides,
-                    uint32_t fallbackWidth,
-                    uint32_t fallbackHeight,
-                    int vsyncInterval);
+    explicit VulkanSwapchain(const VulkanSwapchainDesc& desc);
     ~VulkanSwapchain();
 
     VulkanSwapchain(const VulkanSwapchain&) = delete;
@@ -65,8 +74,7 @@ private:
     VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
     VkDevice         m_device         = VK_NULL_HANDLE;
     VkSurfaceKHR     m_surface        = VK_NULL_HANDLE;
-    uint32_t         m_fallbackWidth  = 0;
-    uint32_t         m_fallbackHeight = 0;
+    VkExtent2D       m_fallbackExtent = { 0, 0 };
 
     // Function-pointer overrides captured from the window. When non-null,
     // we route through SL's interposed wrappers so SL can install its

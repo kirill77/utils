@@ -53,25 +53,18 @@ VkPresentModeKHR pickPresentMode(VkPhysicalDevice pd, VkSurfaceKHR surface, int 
 
 } // namespace
 
-VulkanSwapchain::VulkanSwapchain(VkPhysicalDevice physicalDevice,
-                                 VkDevice device,
-                                 VkSurfaceKHR surface,
-                                 const VulkanCreationOverrides& ov,
-                                 uint32_t fallbackWidth,
-                                 uint32_t fallbackHeight,
-                                 int vsyncInterval)
-    : m_physicalDevice(physicalDevice)
-    , m_device(device)
-    , m_surface(surface)
-    , m_fallbackWidth(fallbackWidth)
-    , m_fallbackHeight(fallbackHeight)
-    , m_vsyncInterval(vsyncInterval)
+VulkanSwapchain::VulkanSwapchain(const VulkanSwapchainDesc& desc)
+    : m_physicalDevice(desc.physicalDevice)
+    , m_device(desc.device)
+    , m_surface(desc.surface)
+    , m_fallbackExtent(desc.fallbackExtent)
+    , m_vsyncInterval(desc.vsyncInterval)
 {
-    m_pfnCreateSwapchain    = ov.pfnVkCreateSwapchainKHR    ? ov.pfnVkCreateSwapchainKHR    : &vkCreateSwapchainKHR;
-    m_pfnDestroySwapchain   = ov.pfnVkDestroySwapchainKHR   ? ov.pfnVkDestroySwapchainKHR   : &vkDestroySwapchainKHR;
-    m_pfnGetSwapchainImages = ov.pfnVkGetSwapchainImagesKHR ? ov.pfnVkGetSwapchainImagesKHR : &vkGetSwapchainImagesKHR;
-    m_pfnAcquireNextImage   = ov.pfnVkAcquireNextImageKHR   ? ov.pfnVkAcquireNextImageKHR   : &vkAcquireNextImageKHR;
-    m_pfnQueuePresent       = ov.pfnVkQueuePresentKHR       ? ov.pfnVkQueuePresentKHR       : &vkQueuePresentKHR;
+    m_pfnCreateSwapchain    = desc.pfnCreateSwapchain    ? desc.pfnCreateSwapchain    : &vkCreateSwapchainKHR;
+    m_pfnDestroySwapchain   = desc.pfnDestroySwapchain   ? desc.pfnDestroySwapchain   : &vkDestroySwapchainKHR;
+    m_pfnGetSwapchainImages = desc.pfnGetSwapchainImages ? desc.pfnGetSwapchainImages : &vkGetSwapchainImagesKHR;
+    m_pfnAcquireNextImage   = desc.pfnAcquireNextImage   ? desc.pfnAcquireNextImage   : &vkAcquireNextImageKHR;
+    m_pfnQueuePresent       = desc.pfnQueuePresent       ? desc.pfnQueuePresent       : &vkQueuePresentKHR;
     create();
 }
 
@@ -100,9 +93,9 @@ void VulkanSwapchain::create()
     if (caps.currentExtent.width != UINT32_MAX) {
         m_extent = caps.currentExtent;
     } else {
-        m_extent.width  = std::clamp<uint32_t>(m_fallbackWidth,
+        m_extent.width  = std::clamp<uint32_t>(m_fallbackExtent.width,
                                                 caps.minImageExtent.width,  caps.maxImageExtent.width);
-        m_extent.height = std::clamp<uint32_t>(m_fallbackHeight,
+        m_extent.height = std::clamp<uint32_t>(m_fallbackExtent.height,
                                                 caps.minImageExtent.height, caps.maxImageExtent.height);
     }
 

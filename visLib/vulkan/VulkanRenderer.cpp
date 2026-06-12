@@ -124,10 +124,21 @@ VulkanRenderer::VulkanRenderer(VulkanWindow* pWindow, const RendererConfig& conf
     , m_device(pWindow->getDevice())
     , m_queue(pWindow->getGraphicsQueue())
 {
-    m_pSwapchain = std::make_unique<VulkanSwapchain>(
-        pWindow->getPhysicalDevice(), pWindow->getDevice(), pWindow->getSurface(),
-        pWindow->getOverrides(), pWindow->getWidth(), pWindow->getHeight(),
-        m_config.vsyncInterval);
+    // Project the 5 swapchain-relevant override hooks out of the window's full
+    // VulkanCreationOverrides here, where both the public config and the
+    // internal swapchain are visible.
+    const auto& ov = pWindow->getOverrides();
+    m_pSwapchain = std::make_unique<VulkanSwapchain>(VulkanSwapchainDesc{
+        .physicalDevice        = pWindow->getPhysicalDevice(),
+        .device                = pWindow->getDevice(),
+        .surface               = pWindow->getSurface(),
+        .fallbackExtent        = { pWindow->getWidth(), pWindow->getHeight() },
+        .vsyncInterval         = m_config.vsyncInterval,
+        .pfnCreateSwapchain    = ov.pfnVkCreateSwapchainKHR,
+        .pfnDestroySwapchain   = ov.pfnVkDestroySwapchainKHR,
+        .pfnGetSwapchainImages = ov.pfnVkGetSwapchainImagesKHR,
+        .pfnAcquireNextImage   = ov.pfnVkAcquireNextImageKHR,
+        .pfnQueuePresent       = ov.pfnVkQueuePresentKHR });
     createRenderPass();
     createDepthResources();
     createFramebuffers();
