@@ -8,12 +8,10 @@
 // A flat string key-value map with file I/O.
 //
 // File format (.txt):
-//   // Written by StringMap
 //   key=value
 //   key2=value2
 //
-// Lines starting with or containing '//' are treated as comments;
-// everything from '//' to end of line is stripped before parsing.
+// Blank lines and lines without '=' are ignored on read.
 //
 // Escaping (values only):
 //   backslash  -> \\

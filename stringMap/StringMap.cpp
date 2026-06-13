@@ -111,7 +111,6 @@ StringMap StringMap::parseString(const std::string& text)
 
 void StringMap::writeTo(std::ostream& out) const
 {
-    out << "// Written by StringMap\n";
     for (const auto& [key, value] : m_data) {
         out << key << '=' << escapeValue(value) << '\n';
     }
@@ -121,13 +120,6 @@ void StringMap::parseFrom(std::istream& in)
 {
     std::string line;
     while (std::getline(in, line)) {
-        if (line.empty()) continue;
-        // Strip // comments
-        auto commentPos = line.find("//");
-        if (commentPos != std::string::npos) {
-            line = line.substr(0, commentPos);
-        }
-        if (line.empty()) continue;
         auto eq = line.find('=');
         if (eq == std::string::npos) continue;
         std::string key = line.substr(0, eq);
