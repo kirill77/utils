@@ -120,6 +120,10 @@ void StringMap::parseFrom(std::istream& in)
 {
     std::string line;
     while (std::getline(in, line)) {
+        // getline splits on '\n'; CRLF input leaves a trailing '\r' that would
+        // otherwise be kept in the value (e.g. "vulkan\r"). Real '\r' in a value
+        // arrives escaped as "\r", so dropping a bare trailing one is safe.
+        if (!line.empty() && line.back() == '\r') line.pop_back();
         auto eq = line.find('=');
         if (eq == std::string::npos) continue;
         std::string key = line.substr(0, eq);
