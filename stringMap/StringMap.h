@@ -50,6 +50,8 @@ public:
     int getInt(const std::string& key, int defaultValue = 0) const;
 
     void setBool(const std::string& key, bool value);
+    // Accepts true/1/yes/on as true and false/0/no/off as false (so flags
+    // stored by parseArgs as "1" read back correctly); defaultValue otherwise.
     bool getBool(const std::string& key, bool defaultValue = false) const;
 
     // --- File I/O ---

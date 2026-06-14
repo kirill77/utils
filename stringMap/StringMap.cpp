@@ -70,7 +70,13 @@ bool StringMap::getBool(const std::string& key, bool defaultValue) const
 {
     auto it = m_data.find(key);
     if (it == m_data.end()) return defaultValue;
-    return it->second == "true";
+    // parseArgs stores "1" for presence-only flags, while setBool writes
+    // "true"; accept both spellings plus the common truthy/falsy tokens so a
+    // flag set either way reads back consistently.
+    const std::string& value = it->second;
+    if (value == "true" || value == "1" || value == "yes" || value == "on")  return true;
+    if (value == "false" || value == "0" || value == "no" || value == "off") return false;
+    return defaultValue;
 }
 
 // ---------------------------------------------------------------------------
