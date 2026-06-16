@@ -73,6 +73,11 @@ public:
     VkExtent2D        getDepthExtent() const { return m_depthExtent; }
     VkImageUsageFlags getDepthUsage()  const { return m_depthUsage; }
 
+    // LL2 explicit latency-id attribution diagnostic, for the host app to report.
+    // True when render() chained VkLatencySubmissionPresentIdNV onto every
+    // vkQueueSubmit2 (requested AND VK_NV_low_latency2 present).
+    bool ll2SubmitIdsTagged() const { return m_ll2SubmitIdsActive; }
+
 private:
     static constexpr uint32_t kFramesInFlight = 2;
 
@@ -97,7 +102,16 @@ private:
     VulkanWindow*    m_pWindow = nullptr;
     RendererConfig   m_config;
     Camera           m_camera;
-    uint64_t         m_frameIndex = 0;
+    // 1-based: the value is handed to the host (getCurrentFrameIndex) and used
+    // directly as the LL2 latency id, which must match the frame index the host
+    // passes to Streamline. Starting at 1 also keeps the id off the 0 sentinel.
+    uint64_t         m_frameIndex = 1;
+
+    // LL2 explicit latency-id attribution state, resolved once at construction.
+    // m_ll2SubmitIdsActive: config.enableLl2SubmitIds AND VK_NV_low_latency2 is
+    //   advertised — when true, render() chains the tag onto every vkQueueSubmit2.
+    //   Not gated on driver version.
+    bool             m_ll2SubmitIdsActive = false;
 
     VkDevice         m_device = VK_NULL_HANDLE;
     VkQueue          m_queue  = VK_NULL_HANDLE;

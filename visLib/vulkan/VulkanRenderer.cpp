@@ -15,7 +15,46 @@
 
 namespace visLib {
 
+// VK_NV_low_latency2 provides VkLatencySubmissionPresentIdNV, used below for LL2
+// explicit latency-id attribution. Require a Vulkan SDK new enough to define it
+// (>= 1.3.267) rather than carrying a local fallback that could drift from the
+// registry — fail the build loudly instead.
+#ifndef VK_NV_low_latency2
+#error "Vulkan SDK is too old: VK_NV_low_latency2 (>= 1.3.267) is required for LL2 latency-id attribution. Update the Vulkan SDK."
+#endif
+
 namespace {
+
+// NVIDIA PCI vendor id. Used to confirm VK_NV_low_latency2 is exposed by an
+// NVIDIA GPU before chaining the latency id.
+constexpr uint32_t kPciVendorNvidia = 0x10DE;
+
+// Does this device advertise VK_NV_low_latency2 on an NVIDIA GPU? This is the
+// validity gate for chaining VkLatencySubmissionPresentIdNV: the struct is an NV
+// extension type, so chaining it is only well-formed where the extension exists.
+// (The extension is *enabled* on the device by sl.reflex's interposer hook, not
+// by visLib; advertisement is our proxy for "SL will have enabled it".)
+bool deviceAdvertisesLl2(VkPhysicalDevice pd)
+{
+    if (pd == VK_NULL_HANDLE) return false;
+
+    VkPhysicalDeviceProperties props = {};
+    vkGetPhysicalDeviceProperties(pd, &props);
+    if (props.vendorID != kPciVendorNvidia) return false;
+
+    uint32_t count = 0;
+    if (vkEnumerateDeviceExtensionProperties(pd, nullptr, &count, nullptr) != VK_SUCCESS || count == 0) {
+        return false;
+    }
+    std::vector<VkExtensionProperties> exts(count);
+    if (vkEnumerateDeviceExtensionProperties(pd, nullptr, &count, exts.data()) != VK_SUCCESS) {
+        return false;
+    }
+    for (const auto& e : exts) {
+        if (std::strcmp(e.extensionName, VK_NV_LOW_LATENCY_2_EXTENSION_NAME) == 0) return true;
+    }
+    return false;
+}
 
 struct TransformCB {
     float view[16];
@@ -147,6 +186,16 @@ VulkanRenderer::VulkanRenderer(VulkanWindow* pWindow, const RendererConfig& conf
     createMeshPipeline();
     createTextPipeline();
     initFrameResources();
+
+    // Resolve LL2 explicit latency-id attribution once: chain the id wherever
+    // VK_NV_low_latency2 is advertised.
+    const bool ll2Advertised = deviceAdvertisesLl2(pWindow->getPhysicalDevice());
+    m_ll2SubmitIdsActive = m_config.enableLl2SubmitIds && ll2Advertised;
+    if (m_config.enableLl2SubmitIds && !ll2Advertised) {
+        LOG_WARN("LL2 explicit latency-id tagging requested but VK_NV_low_latency2 is "
+                 "not available on this device (needs an NVIDIA GPU exposing the "
+                 "extension); running in implicit attribution mode");
+    }
 }
 
 VulkanRenderer::~VulkanRenderer()
@@ -874,17 +923,49 @@ box3 VulkanRenderer::render(IQuery* query)
 
     vkEndCommandBuffer(cmd);
 
-    VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    VkSubmitInfo submit = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
-    submit.waitSemaphoreCount   = 1;
-    submit.pWaitSemaphores      = &m_imageAvailable[m_frameSlot];
-    submit.pWaitDstStageMask    = &waitStage;
-    submit.commandBufferCount   = 1;
-    submit.pCommandBuffers      = &cmd;
-    submit.signalSemaphoreCount = 1;
-    submit.pSignalSemaphores    = &m_renderFinished[m_frameSlot];
-    if (vkQueueSubmit(m_queue, 1, &submit, m_inFlightFences[m_frameSlot]) != VK_SUCCESS) {
-        throw std::runtime_error("vkQueueSubmit failed");
+    // Submit via vkQueueSubmit2, the current submit entrypoint (core in the
+    // Vulkan 1.3 device visLib creates, with synchronization2 enabled). The LL2
+    // latency-id struct below chains onto VkSubmitInfo2::pNext.
+    VkSemaphoreSubmitInfo waitSem = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
+    waitSem.semaphore = m_imageAvailable[m_frameSlot];
+    waitSem.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+    VkCommandBufferSubmitInfo cmdInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO };
+    cmdInfo.commandBuffer = cmd;
+
+    VkSemaphoreSubmitInfo signalSem = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
+    signalSem.semaphore = m_renderFinished[m_frameSlot];
+    // Signal once all work completes, matching v1's "signal at end of submit"
+    // semantics that the present's wait relied on.
+    signalSem.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+
+    VkSubmitInfo2 submit = { VK_STRUCTURE_TYPE_SUBMIT_INFO_2 };
+    submit.waitSemaphoreInfoCount   = 1;
+    submit.pWaitSemaphoreInfos      = &waitSem;
+    submit.commandBufferInfoCount   = 1;
+    submit.pCommandBufferInfos      = &cmdInfo;
+    submit.signalSemaphoreInfoCount = 1;
+    submit.pSignalSemaphoreInfos    = &signalSem;
+
+    // LL2 explicit attribution: chaining VkLatencySubmissionPresentIdNV here puts
+    // the device into explicit mode and attributes this submit to our app frame
+    // id. One app submit per frame, so one tag per frame; SL's FG plugin reuses
+    // the same id across the generated presents of the batch. No VkPresentIdKHR
+    // is needed — the Reflex path ignores it. Chained whenever VK_NV_low_latency2
+    // is advertised.
+    VkLatencySubmissionPresentIdNV llId = { VK_STRUCTURE_TYPE_LATENCY_SUBMISSION_PRESENT_ID_NV };
+    if (m_ll2SubmitIdsActive) {
+        // m_frameIndex is 1-based, so it is the present id directly — no +1. This
+        // must match the frame index the host hands to Streamline
+        // (slGetNewFrameToken), which derives the latency id from it as-is; any
+        // offset would mis-bind explicit attribution. Being 1-based also keeps the
+        // id off the 0 "unset" sentinel.
+        llId.presentID = m_frameIndex;
+        submit.pNext   = &llId;
+    }
+
+    if (vkQueueSubmit2(m_queue, 1, &submit, m_inFlightFences[m_frameSlot]) != VK_SUCCESS) {
+        throw std::runtime_error("vkQueueSubmit2 failed");
     }
 
     if (!hasBounds) {

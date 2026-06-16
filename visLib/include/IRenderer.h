@@ -29,6 +29,12 @@ struct RendererConfig {
 
     int vsyncInterval = 1;  // VSync interval: 0 = no wait, 1 = every vblank, 2 = every 2nd vblank, etc.
 
+    // Vulkan-only: chain VkLatencySubmissionPresentIdNV onto vkQueueSubmit2 to put
+    // the device into LL2 explicit latency-id attribution. The Vulkan renderer
+    // tags whenever VK_NV_low_latency2 is present (on an NVIDIA GPU); D3D12 ignores
+    // this flag.
+    bool enableLl2SubmitIds = false;
+
     // Text to encode as a QR code pattern (Version 1, max 20 alphanumeric chars)
     // Used by QRCodePixelShader
     std::string qrCodeText = "VERDICT";
