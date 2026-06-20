@@ -4,8 +4,8 @@
 #include <algorithm>
 #include <cctype>
 
-CSVFileReader::CSVFileReader(const std::string& filename)
-    : m_filename(filename)
+CSVFileReader::CSVFileReader(const std::string& filename, char commentChar)
+    : m_filename(filename), m_commentChar(commentChar)
 {
     // Open the file for reading
     m_file.open(filename, std::ios::in);
@@ -43,12 +43,13 @@ bool CSVFileReader::readRow(std::vector<std::string>& values)
     if (!std::getline(m_file, line)) {
         return false;
     }
-    
-    // Handle empty lines
-    if (line.empty()) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();   // CRLF tolerance
+
+    // Skip empty lines and (if enabled) comment lines
+    if (line.empty() || (m_commentChar != '\0' && line[0] == m_commentChar)) {
         return readRow(values); // Try next line
     }
-    
+
     bool success = parseLine(line, values);
     if (success) {
         m_currentRow++;
@@ -220,11 +221,13 @@ bool CSVFileReader::readHeaders()
     }
     
     std::string line;
-    if (!std::getline(m_file, line)) {
-        return false;
+    while (std::getline(m_file, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();   // CRLF tolerance
+        if (line.empty() || (m_commentChar != '\0' && line[0] == m_commentChar))
+            continue;   // skip blank / comment lines before the header
+        return parseLine(line, m_headers);
     }
-    
-    return parseLine(line, m_headers);
+    return false;
 }
 
 bool CSVFileReader::stringToDouble(const std::string& str, double& value) const

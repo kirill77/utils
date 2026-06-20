@@ -20,8 +20,12 @@ public:
     /**
      * @brief Constructor that opens a file for reading
      * @param filename The path to the CSV file to read
+     * @param commentChar If non-zero, any line whose first character is this
+     *        char is skipped (both when reading the header and the rows),
+     *        letting a file carry a leading provenance/comment block.
+     *        Defaults to '\0' (disabled) so existing callers are unaffected.
      */
-    explicit CSVFileReader(const std::string& filename);
+    explicit CSVFileReader(const std::string& filename, char commentChar = '\0');
     
     /**
      * @brief Destructor that ensures the file is properly closed
@@ -109,6 +113,7 @@ private:
     std::ifstream m_file;                  ///< File stream for reading
     std::vector<std::string> m_headers;    ///< Column headers
     char m_delimiter = ',';                ///< Delimiter character
+    char m_commentChar = '\0';             ///< Skip lines starting with this (0 = disabled)
     size_t m_currentRow = 0;               ///< Current row number (0-based)
     std::streampos m_dataStartPos;         ///< Position where data starts (after headers)
     
