@@ -53,6 +53,16 @@ struct MonitorInfo {
 };
 
 /**
+ * @struct GpuSummary
+ * @brief The GPU the tests run against, as UTF-8 strings ready for JSON/report.
+ */
+struct GpuSummary {
+    bool valid = false;          ///< False if the system reported no GPU
+    std::string name;            ///< GPU name (e.g., "NVIDIA GeForce RTX 5090")
+    std::string driverVersion;   ///< Driver version (e.g., "32.0.16.1047")
+};
+
+/**
  * @struct SystemInfo
  * @brief Aggregated information about the system hardware
  */
@@ -61,6 +71,13 @@ struct SystemInfo {
     std::vector<GpuInfo> gpus;          ///< List of GPUs
     CpuInfo cpu;                        ///< CPU information
     std::vector<MonitorInfo> monitors;  ///< List of monitors
+
+    /**
+     * @brief The GPU whose driver the tests run on, as UTF-8 strings.
+     * @return The first NVIDIA GPU (PCI vendor 0x10DE) if present, else the
+     *         first GPU; GpuSummary::valid is false when no GPU is reported.
+     */
+    GpuSummary primaryGpuSummary() const;
 
     /**
      * @brief Serialize the system info to a CSV-formatted string

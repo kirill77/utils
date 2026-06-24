@@ -434,6 +434,17 @@ SystemInfo collectSystemInfo() {
 // Serialization
 // ============================================================================
 
+GpuSummary SystemInfo::primaryGpuSummary() const {
+    if (gpus.empty()) return {};
+    // Prefer the first NVIDIA GPU (PCI vendor 0x10DE) — the one Streamline runs
+    // on — falling back to the first GPU when none is NVIDIA.
+    const GpuInfo* pPick = &gpus.front();
+    for (const auto& gpu : gpus) {
+        if (gpu.vendorId == 0x10DE) { pPick = &gpu; break; }
+    }
+    return { true, wstringToUtf8(pPick->name), wstringToUtf8(pPick->driverVersion) };
+}
+
 std::string SystemInfo::toCSV() const {
     std::ostringstream oss;
 
