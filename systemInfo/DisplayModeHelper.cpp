@@ -70,61 +70,84 @@ bool GSyncControl::get()
     return isOn;
 }
 
-bool GSyncControl::set(bool enable)
+namespace {
+
+// Write one DWORD DRS setting to the base profile (system-wide). Shared by
+// GSyncControl and DrsKeyControl; `tag` prefixes the log lines.
+bool drsWriteBaseProfileDword(const char* tag, NvU32 settingId, NvU32 value)
 {
-    const NvU32 desired = enable ? VRR_MODE_FULLSCREEN_AND_WINDOWED : VRR_MODE_DISABLED;
-    const char* desiredStr = enable ? "FULLSCREEN_AND_WINDOWED" : "DISABLED";
-
-    LOG_INFO("GSync: writing VRR_MODE=%s to base DRS profile (system-wide)", desiredStr);
-
     if (NvAPI_Initialize() != NVAPI_OK) {
-        LOG_WARN("GSync: NvAPI_Initialize failed");
+        LOG_WARN("%s: NvAPI_Initialize failed", tag);
         return false;
     }
 
     NvDRSSessionHandle hSession = nullptr;
     if (NvAPI_DRS_CreateSession(&hSession) != NVAPI_OK) {
-        LOG_WARN("GSync: NvAPI_DRS_CreateSession failed");
+        LOG_WARN("%s: NvAPI_DRS_CreateSession failed", tag);
         return false;
     }
 
     bool ok = false;
     do {
         if (NvAPI_DRS_LoadSettings(hSession) != NVAPI_OK) {
-            LOG_WARN("GSync: NvAPI_DRS_LoadSettings failed");
+            LOG_WARN("%s: NvAPI_DRS_LoadSettings failed", tag);
             break;
         }
 
         NvDRSProfileHandle hBase = nullptr;
         if (NvAPI_DRS_GetBaseProfile(hSession, &hBase) != NVAPI_OK) {
-            LOG_WARN("GSync: NvAPI_DRS_GetBaseProfile failed");
+            LOG_WARN("%s: NvAPI_DRS_GetBaseProfile failed", tag);
             break;
         }
 
         NVDRS_SETTING setting{};
         setting.version         = NVDRS_SETTING_VER;
-        setting.settingId       = VRR_MODE_ID;
+        setting.settingId       = settingId;
         setting.settingType     = NVDRS_DWORD_TYPE;
-        setting.u32CurrentValue = desired;
+        setting.u32CurrentValue = value;
 
         NvAPI_Status st = NvAPI_DRS_SetSetting(hSession, hBase, &setting);
         if (st != NVAPI_OK) {
-            LOG_WARN("GSync: NvAPI_DRS_SetSetting(VRR_MODE) failed (status=%d)", (int)st);
+            LOG_WARN("%s: NvAPI_DRS_SetSetting(0x%08x) failed (status=%d)", tag, settingId, (int)st);
             break;
         }
 
         st = NvAPI_DRS_SaveSettings(hSession);
         if (st != NVAPI_OK) {
-            LOG_WARN("GSync: NvAPI_DRS_SaveSettings failed (status=%d)", (int)st);
+            LOG_WARN("%s: NvAPI_DRS_SaveSettings failed (status=%d)", tag, (int)st);
             break;
         }
 
-        LOG_INFO("GSync: VRR_MODE=%s persisted to base profile", desiredStr);
         ok = true;
     } while (false);
 
     NvAPI_DRS_DestroySession(hSession);
     return ok;
+}
+
+} // namespace
+
+bool GSyncControl::set(bool enable)
+{
+    const NvU32 desired = enable ? VRR_MODE_FULLSCREEN_AND_WINDOWED : VRR_MODE_DISABLED;
+    const char* desiredStr = enable ? "FULLSCREEN_AND_WINDOWED" : "DISABLED";
+
+    LOG_INFO("GSync: writing VRR_MODE=%s to base DRS profile (system-wide)", desiredStr);
+    if (!drsWriteBaseProfileDword("GSync", VRR_MODE_ID, desired)) return false;
+    LOG_INFO("GSync: VRR_MODE=%s persisted to base profile", desiredStr);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// DrsKeyControl — arbitrary DWORD DRS setting in the base profile.
+// ---------------------------------------------------------------------------
+
+bool DrsKeyControl::setKey(uint32_t settingId, uint32_t value)
+{
+    LOG_INFO("DrsKey: writing setting 0x%08x=0x%x to base DRS profile (system-wide)", settingId, value);
+    if (!drsWriteBaseProfileDword("DrsKey", static_cast<NvU32>(settingId), static_cast<NvU32>(value))) return false;
+    LOG_INFO("DrsKey: setting 0x%08x=0x%x persisted to base profile", settingId, value);
+    return true;
 }
 
 #endif // _WIN32

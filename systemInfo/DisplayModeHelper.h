@@ -54,4 +54,28 @@ public:
     bool set(bool enable);
 };
 
+/**
+ * @class DrsKeyControl
+ * @brief Writes an arbitrary DWORD driver setting (DRS key) to the base
+ *        profile, by raw setting id.
+ *
+ * Generic escape hatch for settings that have no named accessor here (e.g.
+ * ids absent from the public NvApiDriverSettings.h) — the caller supplies the
+ * id and value. Written to the base profile (system-wide) and, like
+ * GSyncControl, NOT restored on exit: callers re-write their desired state
+ * every run.
+ */
+class DrsKeyControl {
+public:
+    DrsKeyControl() = default;
+    DrsKeyControl(const DrsKeyControl&) = delete;
+    DrsKeyControl& operator=(const DrsKeyControl&) = delete;
+
+    /// @brief Write a DWORD setting to the base DRS profile.
+    /// @param settingId Raw DRS setting id.
+    /// @param value     DWORD value to write.
+    /// @return true on success.
+    bool setKey(uint32_t settingId, uint32_t value);
+};
+
 #endif // _WIN32
