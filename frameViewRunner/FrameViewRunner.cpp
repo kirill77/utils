@@ -111,6 +111,23 @@ namespace
         "EnableVROverlay_x64.exe"
     };
 
+    // Directory containing the running slVerdict executable. Used to locate a
+    // PresentMon bundled flat alongside it (the no-FrameView-install case).
+    std::filesystem::path getExecutableDirectory()
+    {
+        std::vector<wchar_t> buf(MAX_PATH);
+        for (;;) {
+            DWORD len = GetModuleFileNameW(nullptr, buf.data(), static_cast<DWORD>(buf.size()));
+            if (len == 0) {
+                return {};  // GetModuleFileNameW failed
+            }
+            if (len < buf.size()) {
+                return std::filesystem::path(std::wstring(buf.data(), len)).parent_path();
+            }
+            buf.resize(buf.size() * 2);  // truncated; grow and retry
+        }
+    }
+
     std::filesystem::path getTempBasePath()
     {
         // Use TEMP environment variable
@@ -137,17 +154,19 @@ std::unique_ptr<FrameViewRunner> FrameViewRunner::create(std::string& outError)
 
         std::filesystem::path frameViewInstallPath = runner->findFrameViewInstallation();
         if (frameViewInstallPath.empty()) {
-            outError = "FrameView installation not found";
+            outError = "PresentMon not found: no PresentMon_x64.exe bundled alongside "
+                       "slVerdict, and no FrameView installation detected";
             LOG_ERROR("FrameViewRunner: %s", outError.c_str());
             return nullptr;
         }
-        LOG_INFO("FrameViewRunner: Found FrameView at: %s", frameViewInstallPath.string().c_str());
+        LOG_INFO("FrameViewRunner: Using PresentMon at: %s", runner->m_presentMonExe.string().c_str());
 
         // We drive FrameView's capture engine (PresentMon_x64.exe) directly,
         // bypassing the FrameView_x64.exe GUI/orchestrator. PresentMon runs
-        // in-place from the installation's bin\ directory, so no copy is needed.
-        // CSVs are written to m_outputDirectory in multi-CSV mode (one file per
-        // captured process), exactly where findLatestCsvForApp() looks for them.
+        // in-place from wherever it was resolved (bundled beside slVerdict, or a
+        // FrameView install's bin\ dir), so no copy is needed. CSVs are written
+        // to m_outputDirectory in multi-CSV mode (one file per captured
+        // process), exactly where findLatestCsvForApp() looks for them.
         std::filesystem::path tempBase = getTempBasePath();
         runner->m_outputDirectory = tempBase / "Results";
 
@@ -194,15 +213,33 @@ FrameViewRunner::~FrameViewRunner()
 
 std::filesystem::path FrameViewRunner::findFrameViewInstallation()
 {
-    // First, try the registry via InstalledAppRegistry
+    // Prefer a PresentMon bundled flat alongside slVerdict.exe. This lets us
+    // ship slVerdict + PresentMon as a self-contained package and run on
+    // machines with no FrameView installed. The bundled exe must be FrameView's
+    // fork of PresentMon (see class docs), not the public open-source build.
+    std::filesystem::path exeDir = getExecutableDirectory();
+    if (!exeDir.empty()) {
+        std::filesystem::path bundledExe = exeDir / "PresentMon_x64.exe";
+        if (std::filesystem::exists(bundledExe)) {
+            LOG_INFO("FrameViewRunner: Using PresentMon bundled alongside slVerdict: %s",
+                     bundledExe.string().c_str());
+            m_installPath = exeDir;
+            m_presentMonExe = bundledExe;
+            m_version = "bundled";
+            return exeDir;
+        }
+    }
+
+    // Otherwise, fall back to an installed FrameView. First, try the registry.
     InstalledAppRegistry registry;
     auto frameViewInfo = registry.find(L"FrameView");
     if (frameViewInfo.has_value() && !frameViewInfo->installLocation.empty()) {
         std::filesystem::path installPath(frameViewInfo->installLocation);
         if (std::filesystem::exists(installPath / "FrameView_x64.exe")) {
-            LOG_INFO("FrameViewRunner: Found FrameView via registry at: %s", 
+            LOG_INFO("FrameViewRunner: Found FrameView via registry at: %s",
                      installPath.string().c_str());
             m_installPath = installPath;
+            m_presentMonExe = installPath / "bin" / "PresentMon_x64.exe";
             // Convert wide string version to narrow string
             if (!frameViewInfo->version.empty()) {
                 const std::wstring& wv = frameViewInfo->version;
@@ -221,9 +258,10 @@ std::filesystem::path FrameViewRunner::findFrameViewInstallation()
     // Fallback: check common installation paths
     for (const auto& commonPath : kCommonFrameViewPaths) {
         if (std::filesystem::exists(commonPath / "FrameView_x64.exe")) {
-            LOG_INFO("FrameViewRunner: Found FrameView at common path: %s", 
+            LOG_INFO("FrameViewRunner: Found FrameView at common path: %s",
                      commonPath.string().c_str());
             m_installPath = commonPath;
+            m_presentMonExe = commonPath / "bin" / "PresentMon_x64.exe";
             // Version unknown when found via fallback path
             return commonPath;
         }
@@ -272,8 +310,9 @@ void FrameViewRunner::killFrameViewProcesses()
 
 bool FrameViewRunner::launchPresentMon(std::string& outError)
 {
-    // FrameView's capture engine lives in the installation's bin\ directory.
-    std::filesystem::path presentMonExe = m_installPath / "bin" / "PresentMon_x64.exe";
+    // Resolved by findFrameViewInstallation(): either bundled flat beside
+    // slVerdict.exe, or in a FrameView install's bin\ directory.
+    std::filesystem::path presentMonExe = m_presentMonExe;
     if (!std::filesystem::exists(presentMonExe)) {
         outError = "PresentMon_x64.exe not found at: " + presentMonExe.string();
         LOG_ERROR("FrameViewRunner: %s", outError.c_str());
@@ -304,8 +343,9 @@ bool FrameViewRunner::launchPresentMon(std::string& outError)
     // writes its per-process CSVs to its current working directory. We therefore
     // launch it with the working directory set to m_outputDirectory so the CSVs
     // land exactly where findLatestCsvForApp() looks. (PresentMon's own DLLs still
-    // resolve from the exe's bin\ directory, which is always on the DLL search
-    // path regardless of CWD.) This is why we use CreateProcessW directly rather
+    // resolve from the directory of its exe -- FrameView's bin\ or, when bundled,
+    // slVerdict's own dir -- which is always on the DLL search path regardless of
+    // CWD.) This is why we use CreateProcessW directly rather
     // than ProcessManager::startProcess, which would force CWD to the exe's dir.
     const std::wstring exeW = presentMonExe.wstring();
     const std::wstring csvW = (m_outputDirectory / L"FrameView.csv").wstring();

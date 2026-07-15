@@ -12,9 +12,18 @@
  *
  * Rather than launching the FrameView_x64.exe GUI/orchestrator (which crashes
  * in its WndProc on some configurations), this class drives FrameView's
- * underlying ETW capture engine, PresentMon_x64.exe, directly and in-place from
- * the installation's bin\ directory. PresentMon runs resident in multi-CSV mode,
- * writing one CSV per captured process into the output directory.
+ * underlying ETW capture engine, PresentMon_x64.exe, directly. PresentMon runs
+ * resident in multi-CSV mode, writing one CSV per captured process into the
+ * output directory.
+ *
+ * PresentMon is located in one of two ways, checked in order:
+ *   1. Bundled: PresentMon_x64.exe (and its DLLs) shipped flat alongside
+ *      slVerdict.exe. Lets slVerdict run on machines with no FrameView install.
+ *   2. Installed: FrameView's PresentMon_x64.exe under the install's bin\ dir,
+ *      located via the registry or common install paths.
+ * NOTE: this must be FrameView's fork of PresentMon (it accepts -frameview /
+ * -multi_csv and emits the FrameView column set incl. MsPCLatency); the public
+ * open-source PresentMon will not work.
  *
  * This class handles:
  * - Auto-detecting FrameView installation
@@ -105,8 +114,9 @@ private:
     void killFrameViewProcesses();
     bool launchPresentMon(std::string& outError);
 
-    std::filesystem::path m_installPath;         ///< FrameView installation path (holds bin\PresentMon_x64.exe)
-    std::string m_version;                       ///< FrameView version
+    std::filesystem::path m_installPath;         ///< Location PresentMon was found (FrameView install dir, or slVerdict's own dir when bundled)
+    std::filesystem::path m_presentMonExe;       ///< Resolved path to PresentMon_x64.exe (bundled beside slVerdict, or FrameView's bin\)
+    std::string m_version;                       ///< FrameView version ("bundled" when shipped alongside slVerdict)
     std::filesystem::path m_outputDirectory;     ///< Where PresentMon writes CSVs
     std::set<std::filesystem::path> m_consumedCsvs;  ///< CSVs already consumed
     mutable std::mutex m_csvMutex;                   ///< Guards m_consumedCsvs
