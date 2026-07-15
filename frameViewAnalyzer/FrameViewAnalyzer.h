@@ -9,6 +9,10 @@ struct FrameViewMetrics {
     double pacing50 = 0.0;                   // pacing error %: mean of the worst 50% of per-window
                                              // (16-frame, step 1) mean |residual from line fit| / window mean * 100
     double avgPcLatencyMs = 0.0;             // mean(MsPCLatency)
+    double avgTimeInQueueMs = 0.0;           // mean(MsUntilDisplayed - MsRenderPresentLatency): present-to-flip
+                                             // minus present-to-render-complete = RSync's time-in-queue. Valid
+                                             // only when hasTimeInQueue is true (can be legitimately ~0).
+    bool hasTimeInQueue = false;             // true when both source columns were present and computed a mean
     size_t analyzedFrames = 0;               // number of frames analyzed (after skipping warmup + outlier reject)
     size_t droppedOutliers = 0;              // intervals discarded as FrameView garbage (> ceiling * median)
 };

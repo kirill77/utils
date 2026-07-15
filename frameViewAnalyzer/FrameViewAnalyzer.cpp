@@ -7,6 +7,18 @@
 
 static const char* const COLUMN_NAME = "MsBetweenDisplayChange";
 static const char* const LATENCY_COLUMN_NAME = "MsPCLatency";
+// Time-in-queue = present-to-flip minus present-to-render-complete. RSync targets
+// ~vblank/2 here; a PCL win that drives TiQ below that target is margin theft, not
+// a real improvement — so we surface TiQ alongside latency for the judge.
+static const char* const UNTIL_DISPLAYED_COLUMN_NAME = "MsUntilDisplayed";
+static const char* const RENDER_PRESENT_COLUMN_NAME = "MsRenderPresentLatency";
+
+// Absolute per-sample sanity ceiling for the latency/present-path columns.
+// FrameView occasionally emits single-frame garbage orders of magnitude beyond
+// physical; those columns feed plain means, which one such sample destroys, so
+// we drop any row where a source value exceeds this. (MsBetweenDisplayChange is
+// filtered separately by a stricter median-relative ceiling below.)
+static constexpr double GARBAGE_CEILING_MS = 5000.0;
 
 bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
                                 size_t skipFrames,
@@ -25,9 +37,13 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
     const auto& headers = reader.getHeaders();
     size_t colIndex = headers.size(); // invalid sentinel
     size_t latencyColIndex = headers.size();
+    size_t untilDisplayedColIndex = headers.size();
+    size_t renderPresentColIndex = headers.size();
     for (size_t i = 0; i < headers.size(); ++i) {
         if (headers[i] == COLUMN_NAME) colIndex = i;
         else if (headers[i] == LATENCY_COLUMN_NAME) latencyColIndex = i;
+        else if (headers[i] == UNTIL_DISPLAYED_COLUMN_NAME) untilDisplayedColIndex = i;
+        else if (headers[i] == RENDER_PRESENT_COLUMN_NAME) renderPresentColIndex = i;
     }
     if (colIndex >= headers.size()) {
         outError = std::string("Column '") + COLUMN_NAME + "' not found in " + csvPath.string();
@@ -42,6 +58,7 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
     struct Sample { size_t idx; double val; };
     std::vector<Sample> intervals;
     std::vector<double> latencies;
+    std::vector<double> timesInQueue;
     std::vector<std::string> row;
     size_t rowIndex = 0;
     size_t frameIdx = 0;
@@ -68,8 +85,24 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
         if (latencyColIndex < row.size() && !row[latencyColIndex].empty()) {
             try {
                 double val = std::stod(row[latencyColIndex]);
-                if (val > 0.0) {
+                if (val > 0.0 && val <= GARBAGE_CEILING_MS) {
                     latencies.push_back(val);
+                }
+            } catch (...) {}
+        }
+
+        // Time-in-queue is the per-frame difference of two present-path columns.
+        // Only count a frame where both parse to positive values, so a missing
+        // half never skews the mean, and reject the row if either exceeds the
+        // garbage ceiling (see GARBAGE_CEILING_MS above).
+        if (untilDisplayedColIndex < row.size() && renderPresentColIndex < row.size() &&
+            !row[untilDisplayedColIndex].empty() && !row[renderPresentColIndex].empty()) {
+            try {
+                double untilDisplayed = std::stod(row[untilDisplayedColIndex]);
+                double renderPresent = std::stod(row[renderPresentColIndex]);
+                if (untilDisplayed > 0.0 && renderPresent > 0.0 &&
+                    untilDisplayed <= GARBAGE_CEILING_MS && renderPresent <= GARBAGE_CEILING_MS) {
+                    timesInQueue.push_back(untilDisplayed - renderPresent);
                 }
             } catch (...) {}
         }
@@ -175,6 +208,14 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
         double latSum = 0.0;
         for (double v : latencies) latSum += v;
         outMetrics.avgPcLatencyMs = latSum / static_cast<double>(latencies.size());
+    }
+
+    // Time-in-queue (optional columns)
+    if (!timesInQueue.empty()) {
+        double tiqSum = 0.0;
+        for (double v : timesInQueue) tiqSum += v;
+        outMetrics.avgTimeInQueueMs = tiqSum / static_cast<double>(timesInQueue.size());
+        outMetrics.hasTimeInQueue = true;
     }
 
     return true;
