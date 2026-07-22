@@ -125,6 +125,106 @@ bool drsWriteBaseProfileDword(const char* tag, NvU32 settingId, NvU32 value)
     return ok;
 }
 
+// Fill an NvAPI_UnicodeString (UTF-16) from an ASCII string.
+void toNvUnicode(NvAPI_UnicodeString dst, const char* src)
+{
+    size_t i = 0;
+    for (; src[i] && i < NVAPI_UNICODE_STRING_MAX - 1; ++i) {
+        dst[i] = static_cast<NvU16>(src[i]);
+    }
+    dst[i] = 0;
+}
+
+// Find the per-app DRS profile containing exeName, or create profile +
+// application entry (both named after the exe) if absent.
+bool drsFindOrCreateAppProfile(const char* tag, NvDRSSessionHandle hSession,
+                               const char* exeName, NvDRSProfileHandle* phProfile)
+{
+    NvAPI_UnicodeString exeNameU{};
+    toNvUnicode(exeNameU, exeName);
+
+    NVDRS_APPLICATION app{};
+    app.version = NVDRS_APPLICATION_VER;
+    if (NvAPI_DRS_FindApplicationByName(hSession, exeNameU, phProfile, &app) == NVAPI_OK) {
+        return true;
+    }
+
+    // No profile references this exe yet. Reuse a same-named profile if one
+    // exists (e.g. left by a previous run whose app entry was removed).
+    if (NvAPI_DRS_FindProfileByName(hSession, exeNameU, phProfile) != NVAPI_OK) {
+        NVDRS_PROFILE profile{};
+        profile.version = NVDRS_PROFILE_VER;
+        toNvUnicode(profile.profileName, exeName);
+        NvAPI_Status st = NvAPI_DRS_CreateProfile(hSession, &profile, phProfile);
+        if (st != NVAPI_OK) {
+            LOG_WARN("%s: NvAPI_DRS_CreateProfile(%s) failed (status=%d)", tag, exeName, (int)st);
+            return false;
+        }
+    }
+
+    app = {};
+    app.version = NVDRS_APPLICATION_VER;
+    toNvUnicode(app.appName, exeName);
+    NvAPI_Status st = NvAPI_DRS_CreateApplication(hSession, *phProfile, &app);
+    if (st != NVAPI_OK) {
+        LOG_WARN("%s: NvAPI_DRS_CreateApplication(%s) failed (status=%d)", tag, exeName, (int)st);
+        return false;
+    }
+    return true;
+}
+
+// Write one DWORD DRS setting to the per-app profile keyed on exeName,
+// creating the profile if needed. The base profile is not touched.
+bool drsWriteAppProfileDword(const char* tag, const char* exeName, NvU32 settingId, NvU32 value)
+{
+    if (NvAPI_Initialize() != NVAPI_OK) {
+        LOG_WARN("%s: NvAPI_Initialize failed", tag);
+        return false;
+    }
+
+    NvDRSSessionHandle hSession = nullptr;
+    if (NvAPI_DRS_CreateSession(&hSession) != NVAPI_OK) {
+        LOG_WARN("%s: NvAPI_DRS_CreateSession failed", tag);
+        return false;
+    }
+
+    bool ok = false;
+    do {
+        if (NvAPI_DRS_LoadSettings(hSession) != NVAPI_OK) {
+            LOG_WARN("%s: NvAPI_DRS_LoadSettings failed", tag);
+            break;
+        }
+
+        NvDRSProfileHandle hProfile = nullptr;
+        if (!drsFindOrCreateAppProfile(tag, hSession, exeName, &hProfile)) {
+            break;
+        }
+
+        NVDRS_SETTING setting{};
+        setting.version         = NVDRS_SETTING_VER;
+        setting.settingId       = settingId;
+        setting.settingType     = NVDRS_DWORD_TYPE;
+        setting.u32CurrentValue = value;
+
+        NvAPI_Status st = NvAPI_DRS_SetSetting(hSession, hProfile, &setting);
+        if (st != NVAPI_OK) {
+            LOG_WARN("%s: NvAPI_DRS_SetSetting(0x%08x) failed (status=%d)", tag, settingId, (int)st);
+            break;
+        }
+
+        st = NvAPI_DRS_SaveSettings(hSession);
+        if (st != NVAPI_OK) {
+            LOG_WARN("%s: NvAPI_DRS_SaveSettings failed (status=%d)", tag, (int)st);
+            break;
+        }
+
+        ok = true;
+    } while (false);
+
+    NvAPI_DRS_DestroySession(hSession);
+    return ok;
+}
+
 } // namespace
 
 bool GSyncControl::set(bool enable)
@@ -147,6 +247,14 @@ bool DrsKeyControl::setKey(uint32_t settingId, uint32_t value)
     LOG_INFO("DrsKey: writing setting 0x%08x=0x%x to base DRS profile (system-wide)", settingId, value);
     if (!drsWriteBaseProfileDword("DrsKey", static_cast<NvU32>(settingId), static_cast<NvU32>(value))) return false;
     LOG_INFO("DrsKey: setting 0x%08x=0x%x persisted to base profile", settingId, value);
+    return true;
+}
+
+bool DrsKeyControl::setAppKey(const char* exeName, uint32_t settingId, uint32_t value)
+{
+    LOG_INFO("DrsKey: writing setting 0x%08x=0x%x to per-app DRS profile '%s'", settingId, value, exeName);
+    if (!drsWriteAppProfileDword("DrsKey", exeName, static_cast<NvU32>(settingId), static_cast<NvU32>(value))) return false;
+    LOG_INFO("DrsKey: setting 0x%08x=0x%x persisted to per-app profile '%s'", settingId, value, exeName);
     return true;
 }
 
