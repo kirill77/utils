@@ -119,6 +119,75 @@ std::string trim(const std::string& str) {
 } // anonymous namespace
 
 // ============================================================================
+// OS Information Collection
+// ============================================================================
+
+namespace {
+
+OsInfo collectOsInfo() {
+    OsInfo os;
+
+    // RtlGetVersion reports the true version — GetVersionEx lies without an
+    // app manifest.
+    RTL_OSVERSIONINFOW ver = {};
+    ver.dwOSVersionInfoSize = sizeof(ver);
+    if (HMODULE hNtdll = GetModuleHandleW(L"ntdll.dll")) {
+        using RtlGetVersionFn = LONG(WINAPI*)(PRTL_OSVERSIONINFOW);
+        auto pRtlGetVersion = reinterpret_cast<RtlGetVersionFn>(
+            GetProcAddress(hNtdll, "RtlGetVersion"));
+        if (pRtlGetVersion) {
+            pRtlGetVersion(&ver);
+        }
+    }
+
+    DWORD ubr = 0;
+    HKEY hKey;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE,
+        L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
+        0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+
+        auto readString = [&hKey](const wchar_t* name) -> std::wstring {
+            wchar_t buf[256] = {};
+            DWORD bufSize = sizeof(buf) - sizeof(wchar_t);
+            DWORD type = 0;
+            if (RegQueryValueExW(hKey, name, nullptr, &type,
+                reinterpret_cast<LPBYTE>(buf), &bufSize) == ERROR_SUCCESS
+                && type == REG_SZ) {
+                return buf;
+            }
+            return L"";
+        };
+
+        os.productName = readString(L"ProductName");
+        os.displayVersion = readString(L"DisplayVersion");
+        os.buildLabEx = readString(L"BuildLabEx");
+
+        DWORD bufSize = sizeof(ubr);
+        DWORD type = 0;
+        if (RegQueryValueExW(hKey, L"UBR", nullptr, &type,
+            reinterpret_cast<LPBYTE>(&ubr), &bufSize) != ERROR_SUCCESS
+            || type != REG_DWORD) {
+            ubr = 0;
+        }
+        RegCloseKey(hKey);
+    }
+
+    if (ver.dwMajorVersion != 0) {
+        std::wostringstream woss;
+        woss << ver.dwMajorVersion << L"." << ver.dwMinorVersion << L"."
+             << ver.dwBuildNumber;
+        if (ubr != 0) {
+            woss << L"." << ubr;
+        }
+        os.version = woss.str();
+    }
+
+    return os;
+}
+
+} // anonymous namespace
+
+// ============================================================================
 // GPU Information Collection
 // ============================================================================
 
@@ -423,6 +492,7 @@ SystemInfo collectSystemInfo() {
         info.machineName = computerName;
     }
 
+    info.os = collectOsInfo();
     info.gpus = collectGpuInfo();
     info.cpu = collectCpuInfo();
     info.monitors = collectMonitorInfo();
@@ -433,6 +503,15 @@ SystemInfo collectSystemInfo() {
 // ============================================================================
 // Serialization
 // ============================================================================
+
+std::string SystemInfo::osSummary() const {
+    std::ostringstream oss;
+    oss << (os.productName.empty() ? "Windows" : wstringToUtf8(os.productName));
+    if (!os.displayVersion.empty()) oss << " " << wstringToUtf8(os.displayVersion);
+    if (!os.version.empty())        oss << " " << wstringToUtf8(os.version);
+    if (!os.buildLabEx.empty())     oss << " (" << wstringToUtf8(os.buildLabEx) << ")";
+    return oss.str();
+}
 
 GpuSummary SystemInfo::primaryGpuSummary() const {
     if (gpus.empty()) return {};
@@ -452,6 +531,14 @@ std::string SystemInfo::toCSV() const {
     oss << "[Machine]\n";
     oss << "Name\n";
     oss << escapeCSV(wstringToUtf8(machineName)) << "\n";
+
+    // OS section
+    oss << "\n[OS]\n";
+    oss << "ProductName,DisplayVersion,Version,BuildLabEx\n";
+    oss << escapeCSV(wstringToUtf8(os.productName)) << ","
+        << escapeCSV(wstringToUtf8(os.displayVersion)) << ","
+        << escapeCSV(wstringToUtf8(os.version)) << ","
+        << escapeCSV(wstringToUtf8(os.buildLabEx)) << "\n";
 
     // GPU section
     oss << "\n[GPU]\n";
@@ -505,7 +592,7 @@ SystemInfo SystemInfo::fromCSV(const std::string& csvData) {
     std::istringstream iss(csvData);
     std::string line;
     
-    enum class Section { None, Machine, GPU, CPU, Monitor, MonitorModes };
+    enum class Section { None, Machine, OS, GPU, CPU, Monitor, MonitorModes };
     Section currentSection = Section::None;
     bool headerSkipped = false;
 
@@ -519,6 +606,10 @@ SystemInfo SystemInfo::fromCSV(const std::string& csvData) {
         // Check for section markers
         if (line == "[Machine]") {
             currentSection = Section::Machine;
+            headerSkipped = false;
+            continue;
+        } else if (line == "[OS]") {
+            currentSection = Section::OS;
             headerSkipped = false;
             continue;
         } else if (line == "[GPU]") {
@@ -551,6 +642,15 @@ SystemInfo SystemInfo::fromCSV(const std::string& csvData) {
         case Section::Machine:
             if (fields.size() >= 1) {
                 info.machineName = utf8ToWstring(fields[0]);
+            }
+            break;
+
+        case Section::OS:
+            if (fields.size() >= 4) {
+                info.os.productName = utf8ToWstring(fields[0]);
+                info.os.displayVersion = utf8ToWstring(fields[1]);
+                info.os.version = utf8ToWstring(fields[2]);
+                info.os.buildLabEx = utf8ToWstring(fields[3]);
             }
             break;
 

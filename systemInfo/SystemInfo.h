@@ -53,6 +53,17 @@ struct MonitorInfo {
 };
 
 /**
+ * @struct OsInfo
+ * @brief Information about the installed operating system
+ */
+struct OsInfo {
+    std::wstring productName;     ///< OS product name (e.g., "Windows 11 Enterprise")
+    std::wstring displayVersion;  ///< Marketing version (e.g., "24H2")
+    std::wstring version;         ///< Full version number (e.g., "10.0.26200.5074")
+    std::wstring buildLabEx;      ///< Build lab string — identifies insider/branch builds
+};
+
+/**
  * @struct GpuSummary
  * @brief The GPU the tests run against, as UTF-8 strings ready for JSON/report.
  */
@@ -68,9 +79,16 @@ struct GpuSummary {
  */
 struct SystemInfo {
     std::wstring machineName;           ///< Windows computer name
+    OsInfo os;                          ///< Operating system information
     std::vector<GpuInfo> gpus;          ///< List of GPUs
     CpuInfo cpu;                        ///< CPU information
     std::vector<MonitorInfo> monitors;  ///< List of monitors
+
+    /**
+     * @brief One-line OS description for logs
+     * @return UTF-8 string, e.g. "Windows 11 Enterprise 24H2 10.0.26200.5074 (26200.5074.amd64fre...)"
+     */
+    std::string osSummary() const;
 
     /**
      * @brief The GPU whose driver the tests run on, as UTF-8 strings.
