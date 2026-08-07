@@ -120,10 +120,13 @@ bool CSVFileReader::isEndOfFile() const
 
 bool CSVFileReader::reset()
 {
-    if (!isValid()) {
+    // Only require an open file: after reading through to EOF the stream's
+    // eofbit makes good() (and so isValid()) false until cleared below —
+    // exactly the state a caller resets from.
+    if (!m_file.is_open()) {
         return false;
     }
-    
+
     m_file.clear(); // Clear any error flags
     m_file.seekg(m_dataStartPos);
     m_currentRow = 0;
