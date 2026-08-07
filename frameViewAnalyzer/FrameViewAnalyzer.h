@@ -15,16 +15,19 @@ struct FrameViewMetrics {
     bool hasTimeInQueue = false;             // true when both source columns were present and computed a mean
     size_t analyzedFrames = 0;               // number of frames analyzed (after skipping warmup + outlier reject)
     size_t droppedOutliers = 0;              // intervals discarded as FrameView garbage (> ceiling * median)
+    size_t keptRows = 0;                     // rows actually analyzed from the tail: min(keepLastRows, rows in file).
+                                             // < keepLastRows means the capture was shorter than the requested window.
 };
 
 class FrameViewAnalyzer {
 public:
-    // Analyze a FrameView CSV file, skipping the first skipFrames rows.
-    // Computes metrics from the MsBetweenDisplayChange column.
+    // Analyze the LAST keepLastRows rows of a FrameView CSV file (the
+    // measurement window sits at the end of a capture; everything before it
+    // is warmup). Computes metrics from the MsBetweenDisplayChange column.
     // Returns false if the file can't be opened, the column is missing,
-    // or there are not enough rows after skipping.
+    // or the kept tail has too few rows.
     static bool analyze(const std::filesystem::path& csvPath,
-                        size_t skipFrames,
+                        size_t keepLastRows,
                         FrameViewMetrics& outMetrics,
                         std::string& outError);
 };

@@ -21,7 +21,7 @@ static const char* const RENDER_PRESENT_COLUMN_NAME = "MsRenderPresentLatency";
 static constexpr double GARBAGE_CEILING_MS = 5000.0;
 
 bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
-                                size_t skipFrames,
+                                size_t keepLastRows,
                                 FrameViewMetrics& outMetrics,
                                 std::string& outError)
 {
@@ -50,11 +50,26 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
         return false;
     }
 
-    // Read all rows, skip warmup frames, collect intervals and latencies.
-    // Each interval keeps its original frame index: invalid samples (missing,
-    // unparseable, non-positive, or garbage) leave a gap rather than shifting
-    // their neighbors together, so the per-window line fits below see true
-    // frame positions.
+    // The tail anchor needs the file's total row count first: pass 1 counts
+    // data rows, pass 2 (below) skips everything before the kept tail. Two
+    // cheap streaming passes beat buffering every parsed row.
+    size_t totalRows = 0;
+    {
+        std::vector<std::string> countRow;
+        while (reader.readRow(countRow)) ++totalRows;
+    }
+    if (!reader.reset()) {
+        outError = "Failed to rewind FrameView CSV: " + csvPath.string();
+        return false;
+    }
+    const size_t skipFrames = (totalRows > keepLastRows) ? totalRows - keepLastRows : 0;
+    outMetrics.keptRows = totalRows - skipFrames;
+
+    // Read all rows, skip everything before the measurement tail, collect
+    // intervals and latencies. Each interval keeps its original frame index:
+    // invalid samples (missing, unparseable, non-positive, or garbage) leave
+    // a gap rather than shifting their neighbors together, so the per-window
+    // line fits below see true frame positions.
     struct Sample { size_t idx; double val; };
     std::vector<Sample> intervals;
     std::vector<double> latencies;
@@ -112,7 +127,9 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
     constexpr size_t MIN_VALID = 12; // valid samples required for a window to count
 
     if (intervals.size() < WINDOW) {
-        outError = "Not enough data rows after skipping " + std::to_string(skipFrames) + " frames";
+        outError = "Not enough data rows in measurement tail (kept " +
+                   std::to_string(outMetrics.keptRows) + " of " + std::to_string(totalRows) +
+                   " rows, " + std::to_string(intervals.size()) + " valid intervals)";
         return false;
     }
 
