@@ -13,11 +13,16 @@ static const char* const LATENCY_COLUMN_NAME = "MsPCLatency";
 static const char* const UNTIL_DISPLAYED_COLUMN_NAME = "MsUntilDisplayed";
 static const char* const RENDER_PRESENT_COLUMN_NAME = "MsRenderPresentLatency";
 
-// Absolute per-sample sanity ceiling for the latency/present-path columns.
-// FrameView occasionally emits single-frame garbage orders of magnitude beyond
-// physical; those columns feed plain means, which one such sample destroys, so
-// we drop any row where a source value exceeds this. (MsBetweenDisplayChange is
-// filtered separately by a stricter median-relative ceiling below.)
+// Absolute per-sample sanity ceiling for every column read here. FrameView
+// occasionally emits single-frame garbage orders of magnitude beyond physical
+// (a known FV bug); one such sample destroys the plain means and the window
+// fits, so any value above this is dropped at ingestion. Real values stay far
+// below (even a 1 fps hitch is 1000 ms) while the garbage sits ~13 orders of
+// magnitude out, so the exact ceiling is not sensitive. Deliberately NOT
+// median-relative: with flip metering off, MFG presents flip in bursts, making
+// the interval stream legitimately bimodal (sub-ms burst gaps + one real
+// ~frame-time gap per render frame); the burst mode holds the majority, so a
+// median-relative ceiling landed below the real intervals and rejected them all.
 static constexpr double GARBAGE_CEILING_MS = 5000.0;
 
 bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
@@ -67,7 +72,7 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
 
     // Read all rows, skip everything before the measurement tail, collect
     // intervals and latencies. Each interval keeps its original frame index:
-    // invalid samples (missing, unparseable, non-positive, or garbage) leave
+    // invalid samples (missing, unparseable, negative, or garbage) leave
     // a gap rather than shifting their neighbors together, so the per-window
     // line fits below see true frame positions.
     struct Sample { size_t idx; double val; };
@@ -89,8 +94,10 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
         if (colIndex < row.size() && !row[colIndex].empty()) {
             try {
                 double val = std::stod(row[colIndex]);
-                if (val > 0.0) {
+                if (val >= 0.0 && val <= GARBAGE_CEILING_MS) {
                     intervals.push_back({idx, val});
+                } else if (val > GARBAGE_CEILING_MS) {
+                    ++outMetrics.droppedOutliers;
                 }
             } catch (...) {
                 // Skip unparseable values
@@ -131,34 +138,6 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
                    std::to_string(outMetrics.keptRows) + " of " + std::to_string(totalRows) +
                    " rows, " + std::to_string(intervals.size()) + " valid intervals)";
         return false;
-    }
-
-    // Reject FrameView's occasional single-frame garbage interval (a known FV
-    // bug: one absurd value, orders of magnitude beyond physical). A
-    // median-relative ceiling separates such samples from real frame hitches —
-    // which sit within a few tens of x of the median even in a bad run — without
-    // clipping genuine stutters. Filtering here (before any statistic) protects
-    // avgFrameMs and pacing50 alike: a single garbage sample would otherwise
-    // poison both the line fits and the window-mean denominators. The
-    // garbage-vs-real gap is ~13 orders of magnitude, so the exact ceiling is
-    // not sensitive; 100x is comfortably above any real frame yet nukes the
-    // artifact. Dropped samples leave a gap (indices are preserved), same as
-    // any other invalid frame.
-    {
-        std::vector<double> sorted;
-        sorted.reserve(intervals.size());
-        for (const Sample& s : intervals) sorted.push_back(s.val);
-        std::nth_element(sorted.begin(), sorted.begin() + sorted.size() / 2, sorted.end());
-        const double median = sorted[sorted.size() / 2];
-        const double ceiling = 100.0 * median;
-        const size_t before = intervals.size();
-        std::erase_if(intervals, [ceiling](const Sample& s) { return s.val > ceiling; });
-        outMetrics.droppedOutliers = before - intervals.size();
-        if (intervals.size() < WINDOW) {
-            outError = "Not enough valid intervals after dropping " +
-                       std::to_string(outMetrics.droppedOutliers) + " FrameView outlier(s)";
-            return false;
-        }
     }
 
     outMetrics.analyzedFrames = intervals.size();
@@ -206,7 +185,8 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
                 const double x = static_cast<double>(intervals[k].idx - start);
                 absSum += std::abs(intervals[k].val - (a + b * x));
             }
-            const double windowMean = sy / nd; // > 0: all samples are positive
+            const double windowMean = sy / nd;
+            if (windowMean <= 0.0) continue; // all-zero window: nothing to normalize by
             scores.push_back(absSum / nd / windowMean * 100.0);
         }
     }
