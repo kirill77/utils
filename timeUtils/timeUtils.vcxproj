@@ -143,7 +143,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="TimeUtils.h" />
+    <ClInclude Include="timeUtils.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="timeUtils.cpp" />

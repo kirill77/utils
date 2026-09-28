@@ -7,6 +7,8 @@
 
 struct FileUtils
 {
+    // Full path of the running executable
+    static std::filesystem::path getExecutablePath();
     static bool findTheFolder(const std::string &sName, std::filesystem::path &path);
     static bool findTheFile(const std::wstring &fileName, std::filesystem::path &path, const std::vector<std::wstring> &searchPaths = {});
     static bool getOrCreateSubFolderUsingTimestamp(const std::string &baseFolder, std::filesystem::path &outPath);
