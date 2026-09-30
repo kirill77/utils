@@ -218,7 +218,8 @@ void D3D12Renderer::initializeRenderResources()
     D3D12_DEPTH_STENCIL_DESC depthStencilDesc = {};
     depthStencilDesc.DepthEnable = TRUE;
     depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-    depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+    depthStencilDesc.DepthFunc = (m_config.depthTest == DepthTest::LessEqual)
+        ? D3D12_COMPARISON_FUNC_LESS_EQUAL : D3D12_COMPARISON_FUNC_LESS;
     depthStencilDesc.StencilEnable = FALSE;
     psoDesc.DepthStencilState = depthStencilDesc;
 

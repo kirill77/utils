@@ -16,6 +16,12 @@ class IText;
 class IWindow;
 class IVisObject;
 
+// Depth comparison used by the mesh pipeline
+enum class DepthTest {
+    Less,       // Standard: on equal depth the first draw wins
+    LessEqual,  // On equal depth later draws also pass (e.g. stacked draws of the same mesh)
+};
+
 // Renderer configuration
 struct RendererConfig {
     bool enableDebugLayer = false;      // Enable graphics API debug validation
@@ -28,6 +34,9 @@ struct RendererConfig {
     uint32_t pixelShaderIterations = 100;  // Iteration count (used by HeavyPixelShader/QRCodePixelShader)
 
     int vsyncInterval = 1;  // VSync interval: 0 = no wait, 1 = every vblank, 2 = every 2nd vblank, etc.
+
+    // Mesh depth test. Applied at renderer creation only; setConfig() does not rebuild the pipeline.
+    DepthTest depthTest = DepthTest::Less;
 
     // Vulkan-only: chain VkLatencySubmissionPresentIdNV onto vkQueueSubmit2 to put
     // the device into LL2 explicit latency-id attribution. The Vulkan renderer

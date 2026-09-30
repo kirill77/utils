@@ -596,11 +596,12 @@ void VulkanRenderer::createMeshPipeline()
     ds.pDynamicStates    = dyn;
 
     // Mesh depth/stencil: mirror the D3D12 default (DepthEnable=TRUE,
-    // DepthWriteMask=ALL, DepthFunc=LESS, StencilEnable=FALSE).
+    // DepthWriteMask=ALL, DepthFunc from config, StencilEnable=FALSE).
     VkPipelineDepthStencilStateCreateInfo dss = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
     dss.depthTestEnable       = VK_TRUE;
     dss.depthWriteEnable      = VK_TRUE;
-    dss.depthCompareOp        = VK_COMPARE_OP_LESS;
+    dss.depthCompareOp        = (m_config.depthTest == DepthTest::LessEqual)
+        ? VK_COMPARE_OP_LESS_OR_EQUAL : VK_COMPARE_OP_LESS;
     dss.depthBoundsTestEnable = VK_FALSE;
     dss.stencilTestEnable     = VK_FALSE;
 
