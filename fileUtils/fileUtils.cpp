@@ -1,4 +1,6 @@
+#ifdef _WIN32
 #include "WindowsCompat.h"
+#endif
 #include <stdio.h>
 #include <stdarg.h>
 #include <string>
@@ -6,13 +8,22 @@
 #include "fileUtils.h"
 #include "utils/timeUtils/timeUtils.h"
 
+std::filesystem::path FileUtils::getExecutablePath()
+{
+#ifdef _WIN32
+    std::wstring buffer(1024, L'\0');
+    DWORD length = GetModuleFileNameW(nullptr, &buffer[0], (DWORD)buffer.size());
+    buffer.resize(length);
+    return buffer;
+#else
+    std::error_code ec;
+    return std::filesystem::read_symlink("/proc/self/exe", ec);
+#endif
+}
+
 bool FileUtils::findTheFolder(const std::string &sName, std::filesystem::path& _path)
 {
-    std::wstring buffer;
-    buffer.resize(1024);
-    GetModuleFileNameW(nullptr, &buffer[0], (DWORD)buffer.size());
-
-    std::filesystem::path path = buffer;
+    std::filesystem::path path = getExecutablePath();
 
     path.remove_filename();
 
@@ -42,10 +53,7 @@ bool FileUtils::findTheFile(const std::wstring &fileName, std::filesystem::path 
     if (paths.empty())
     {
         // Get the executable directory
-        std::wstring buffer;
-        buffer.resize(1024);
-        GetModuleFileNameW(nullptr, &buffer[0], (DWORD)buffer.size());
-        std::filesystem::path exePath = buffer;
+        std::filesystem::path exePath = getExecutablePath();
         exePath.remove_filename();
         exePath = exePath.lexically_normal(); // Normalize the executable path
         

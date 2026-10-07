@@ -1,8 +1,8 @@
-#include <intrin.h>
+#include <bit>
 #include <string.h>
 #include "RNGSobol.h"
 
-unsigned __int64 RNGSobol::cjn[QRNG_NDMS][63] = { 0 }; ///< used for random numbers generation
+uint64_t RNGSobol::cjn[QRNG_NDMS][63] = { 0 }; ///< used for random numbers generation
 
 RNGSobol::RNGSobol()
 {
@@ -20,11 +20,11 @@ void RNGSobol::updateUValue()
     unsigned grayCode = (m_uCurSeed >> 1) ^ m_uCurSeed;
     unsigned changedBits = m_prev[m_uCurDim].uPrevSeed ^ grayCode;
     m_prev[m_uCurDim].uPrevSeed = grayCode;
-    unsigned long uBit;
-    while (_BitScanForward(&uBit, changedBits))
+    while (changedBits != 0)
     {
+        unsigned uBit = (unsigned)std::countr_zero(changedBits);
         m_prev[m_uCurDim].uValue ^= RNGSobol::cjn[m_uCurDim][uBit];
-        changedBits &= ~(1 << uBit);
+        changedBits &= ~(1u << uBit);
     }
 }
 int RNGSobol::GeneratePolynomials(int buffer[QRNG_NDMS], bool primitive)
@@ -200,7 +200,7 @@ void RNGSobol::GenerateCJ()
             // copy calculated v to cj
             for (i = 0; i < 63; ++i)
             {
-                RNGSobol::cjn[d][i] |= (__int64)v[i + u] << j;
+                RNGSobol::cjn[d][i] |= (int64_t)v[i + u] << j;
             }
         }
         ++d;

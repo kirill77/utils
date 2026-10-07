@@ -1,7 +1,7 @@
 // timeUtils.cpp : Defines the functions for the static library.
 //
 
-#include "TimeUtils.h"
+#include "timeUtils.h"
 
 std::string TimeUtils::timeStampToString(std::time_t inTS, const char* sFormatString)
 {
@@ -13,8 +13,7 @@ std::string TimeUtils::timeStampToString(std::time_t inTS, const char* sFormatSt
 
 std::string TimeUtils::timeStampToLocalString(std::time_t inTS, const char* sFormatString)
 {
-    std::tm tm_local;
-    localtime_s(&tm_local, &inTS);
+    std::tm tm_local = timeStampToLocalTM(inTS);
     char buffer[80];
     std::strftime(buffer, sizeof(buffer), sFormatString, &tm_local);
     return buffer;
@@ -23,8 +22,23 @@ std::string TimeUtils::timeStampToLocalString(std::time_t inTS, const char* sFor
 std::tm TimeUtils::timeStampToTM(std::time_t inTS)
 {
     std::tm tm_utc;
+#ifdef _WIN32
     gmtime_s(&tm_utc, &inTS);
+#else
+    gmtime_r(&inTS, &tm_utc);
+#endif
     return tm_utc;
+}
+
+std::tm TimeUtils::timeStampToLocalTM(std::time_t inTS)
+{
+    std::tm tm_local;
+#ifdef _WIN32
+    localtime_s(&tm_local, &inTS);
+#else
+    localtime_r(&inTS, &tm_local);
+#endif
+    return tm_local;
 }
 
 int TimeUtils::getDayOfWeek(int year, int month, int day)

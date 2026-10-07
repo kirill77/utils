@@ -7,31 +7,121 @@
 #include <mutex>
 #include <vector>
 #include <algorithm>
+#include <cstdarg>
+#include <cstdio>
+#include <fstream>
 #include "utils/fileUtils/fileUtils.h"
 #include "utils/timeUtils/timeUtils.h"
 #include "ILog.h"
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#include <sys/syscall.h>
+#endif
+
+namespace
+{
+// Console output: a Win32 console with text attributes on Windows, stdout
+// (ANSI-coloured when it is a terminal) elsewhere.
+#ifdef _WIN32
+void openConsole()
+{
+    AllocConsole();
+    SetConsoleTitleA("KirillLog");
+}
+
+void closeConsole()
+{
+    FreeConsole();
+}
+
+void writeConsole(LogLevel level, const std::string& sMessage)
+{
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    const WORD white = FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED;
+    WORD attribute = white;
+    switch (level)
+    {
+    case LogLevel::eVerbose: attribute = FOREGROUND_BLUE | FOREGROUND_GREEN; break; // cyan
+    case LogLevel::eInfo:    attribute = white; break;
+    case LogLevel::eWarning: attribute = FOREGROUND_GREEN | FOREGROUND_RED; break;  // yellow
+    case LogLevel::eError:   attribute = FOREGROUND_RED; break;
+    default: assert(false);
+    }
+    SetConsoleTextAttribute(hOut, attribute);
+    DWORD outChars;
+    WriteConsoleA(hOut, sMessage.c_str(), (DWORD)sMessage.length(), &outChars, nullptr);
+    if (level != LogLevel::eInfo)
+    {
+        SetConsoleTextAttribute(hOut, white);
+    }
+}
+
+unsigned long currentThreadId()
+{
+    return GetCurrentThreadId();
+}
+#else
+void openConsole()
+{
+}
+
+void closeConsole()
+{
+}
+
+void writeConsole(LogLevel level, const std::string& sMessage)
+{
+    static const bool bColor = isatty(STDOUT_FILENO);
+    const char* sColor = "";
+    switch (level)
+    {
+    case LogLevel::eVerbose: sColor = "\033[36m"; break; // cyan
+    case LogLevel::eInfo:    sColor = ""; break;
+    case LogLevel::eWarning: sColor = "\033[33m"; break; // yellow
+    case LogLevel::eError:   sColor = "\033[31m"; break; // red
+    default: assert(false);
+    }
+    if (bColor && sColor[0] != '\0')
+    {
+        std::fprintf(stdout, "%s%s\033[0m", sColor, sMessage.c_str());
+    }
+    else
+    {
+        std::fputs(sMessage.c_str(), stdout);
+    }
+    std::fflush(stdout);
+}
+
+unsigned long currentThreadId()
+{
+    return (unsigned long)syscall(SYS_gettid);
+}
+#endif
+
+// Truncates (or creates) the file at sPath.
+void createEmptyFile(const std::string& sPath)
+{
+    std::ofstream file(sPath, std::ios::trunc);
+}
+}
 
 static std::string createLogFileName(const char *sName)
 {
     // Get the current time
     std::time_t now = std::time(nullptr);
 
-    // Create a tm structure to hold the local time
-    std::tm timeInfo;
-    localtime_s(&timeInfo, &now);
+    std::tm timeInfo = TimeUtils::timeStampToLocalTM(now);
 
     std::filesystem::path path;
     FileUtils::findTheFolder("logs", path);
-    std::string sPath = path.string();
-    sPath += "\\";
-    sPath += sName;
 
     char buffer[32];
     std::strftime(buffer, sizeof(buffer), "_%Y-%m-%d_%H-%M-%S.log", &timeInfo);
 
-    sPath += buffer;
-
-    return sPath;
+    return (path / (std::string(sName) + buffer)).string();
 }
 
 struct MyLog : public ILog
@@ -51,19 +141,13 @@ struct MyLog : public ILog
         // If we have a file path, create the log file
         if (!m_sLogPath.empty())
         {
-            FILE* pFile = nullptr;
-            fopen_s(&pFile, m_sLogPath.c_str(), "wt");
-            if (pFile)
-            {
-                fclose(pFile);
-            }
+            createEmptyFile(m_sLogPath);
         }
         else
         {
             // Console logging (no path specified)
-            AllocConsole();
-            SetConsoleTitleA("KirillLog");
-            m_pOutHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+            openConsole();
+            m_bConsoleOutput = true;
         }
     }
 
@@ -78,18 +162,17 @@ struct MyLog : public ILog
     }
     virtual void enableConsoleOutput(bool bEnable) override
     {
-        if (bEnable && m_pOutHandle == nullptr)
+        if (bEnable && !m_bConsoleOutput)
         {
             // Initialize console if enabling and not already initialized
-            AllocConsole();
-            SetConsoleTitleA("KirillLog");
-            m_pOutHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+            openConsole();
+            m_bConsoleOutput = true;
         }
-        else if (!bEnable && m_pOutHandle != nullptr && !m_sLogPath.empty())
+        else if (!bEnable && m_bConsoleOutput && !m_sLogPath.empty())
         {
             // Disable console output (only if we have a log file, don't disable console-only mode)
-            FreeConsole();
-            m_pOutHandle = nullptr;
+            closeConsole();
+            m_bConsoleOutput = false;
         }
     }
     
@@ -122,7 +205,11 @@ struct MyLog : public ILog
 
         for ( ; ; )
         {
-            int msgSize = vsnprintf(&msg[0], msg.size(), fmt, args);
+            // vsnprintf consumes the va_list it is given, so each attempt formats from a fresh copy.
+            va_list argsCopy;
+            va_copy(argsCopy, args);
+            int msgSize = vsnprintf(&msg[0], msg.size(), fmt, argsCopy);
+            va_end(argsCopy);
             if (msgSize > 0 && msgSize < msg.size() - 5)
             {
                 msg.resize(msgSize);
@@ -159,12 +246,7 @@ struct MyLog : public ILog
         if (bNewFile)
         {
             // Create the new log file only if it doesn't already exist
-            FILE* pFile = nullptr;
-            fopen_s(&pFile, m_sLogPath.c_str(), "wt");
-            if (pFile)
-            {
-                fclose(pFile);
-            }
+            createEmptyFile(m_sLogPath);
         }
     }
 
@@ -206,7 +288,7 @@ private:
             else if (level == LogLevel::eError) levelPrefix = "ERROR: ";
 
             char buffer[256];
-            sprintf_s(buffer, "[%s](%d)[%s[%d]] %s", sTime.c_str(), GetCurrentThreadId(), sFile, uLine, levelPrefix);
+            std::snprintf(buffer, sizeof(buffer), "[%s](%lu)[%s[%u]] %s", sTime.c_str(), currentThreadId(), sFile, uLine, levelPrefix);
             finalMessage = std::string(buffer) + logMessage;
         }
         else
@@ -219,42 +301,13 @@ private:
         // Write to file if path is specified
         if (m_sLogPath.size() > 0)
         {
-            FILE* pFile = nullptr;
-            fopen_s(&pFile, m_sLogPath.c_str(), "a+");
-            if (pFile)
-            {
-                fprintf(pFile, "%s", finalMessage.c_str());
-                fclose(pFile);
-            }
+            std::ofstream file(m_sLogPath, std::ios::app);
+            file << finalMessage;
         }
-        
-        // Write to console if handle is initialized
-        if (m_pOutHandle != nullptr)
+
+        if (m_bConsoleOutput)
         {
-            // Set attribute for newly written text
-            switch (level)
-            {
-            case LogLevel::eVerbose:
-                SetConsoleTextAttribute(m_pOutHandle, FOREGROUND_BLUE | FOREGROUND_GREEN); // Cyan for verbose
-                break;
-            case LogLevel::eInfo:
-                SetConsoleTextAttribute(m_pOutHandle, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
-                break;
-            case LogLevel::eWarning:
-                SetConsoleTextAttribute(m_pOutHandle, FOREGROUND_GREEN | FOREGROUND_RED);
-                break;
-            case LogLevel::eError:
-                SetConsoleTextAttribute(m_pOutHandle, FOREGROUND_RED);
-                break;
-            default:
-                assert(false);
-            }
-            DWORD OutChars;
-            WriteConsoleA(m_pOutHandle, finalMessage.c_str(), (DWORD)finalMessage.length(), &OutChars, nullptr);
-            if (level != LogLevel::eInfo)
-            {
-                SetConsoleTextAttribute(m_pOutHandle, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
-            }
+            writeConsole(level, finalMessage);
         }
 
         // Notify observers (with automatic cleanup of expired weak_ptrs)
@@ -283,7 +336,7 @@ private:
         }
     }
 
-    HANDLE m_pOutHandle = nullptr;
+    bool m_bConsoleOutput = false;
     mutable std::mutex m_mutex;
     std::string m_sLogPath;
 
