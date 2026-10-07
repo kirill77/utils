@@ -8,6 +8,7 @@ struct TimeUtils
     static std::string timeStampToString(std::time_t timeT, const char* sFormatString = "%Y%m%d-%H:%M:%S");
     static std::string timeStampToLocalString(std::time_t timeT, const char* sFormatString = "%Y%m%d-%H:%M:%S");
     static std::tm timeStampToTM(std::time_t timeT);
+    static std::tm timeStampToLocalTM(std::time_t timeT);
     
     // Returns true if US stock market is open
     // Regular hours: 6:30 AM - 1:00 PM Pacific (9:30 AM - 4:00 PM Eastern)

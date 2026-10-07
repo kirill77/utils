@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="TimeUtils.h">
+    <ClInclude Include="timeUtils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

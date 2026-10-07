@@ -1,5 +1,6 @@
 #include "HttpServer.h"
 
+#ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -9,17 +10,118 @@
 #include <ws2tcpip.h>
 
 #pragma comment(lib, "Ws2_32.lib")
+#else
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <pthread.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <unistd.h>
+#endif
 
 #include <cctype>
 #include <sstream>
 #include <vector>
+
+namespace {
+
+// The few socket calls that differ between Winsock and BSD sockets.
+#ifdef _WIN32
+using SocketHandle = SOCKET;
+
+bool startSockets()
+{
+    WSADATA wsaData;
+    return WSAStartup(MAKEWORD(2, 2), &wsaData) == 0;
+}
+
+void stopSockets()
+{
+    WSACleanup();
+}
+
+void closeSocket(SocketHandle sock)
+{
+    closesocket(sock);
+}
+
+// Closing the listen socket is what unblocks a thread waiting in accept().
+void closeListenSocket(SocketHandle sock)
+{
+    closesocket(sock);
+}
+
+void setReceiveTimeout(SocketHandle sock, int timeoutMs)
+{
+    DWORD timeout = timeoutMs;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+}
+
+int sendString(SocketHandle sock, const std::string& data)
+{
+    return send(sock, data.c_str(), static_cast<int>(data.length()), 0);
+}
+
+void nameThread(std::thread& thread)
+{
+    SetThreadDescription(thread.native_handle(), L"HttpServerLoop");
+}
+#else
+using SocketHandle = int;
+constexpr SocketHandle INVALID_SOCKET = -1;
+constexpr int SOCKET_ERROR = -1;
+
+bool startSockets()
+{
+    return true;
+}
+
+void stopSockets()
+{
+}
+
+void closeSocket(SocketHandle sock)
+{
+    close(sock);
+}
+
+// close() alone does not wake a thread blocked in accept(); shutdown() does.
+void closeListenSocket(SocketHandle sock)
+{
+    shutdown(sock, SHUT_RDWR);
+    close(sock);
+}
+
+void setReceiveTimeout(SocketHandle sock, int timeoutMs)
+{
+    timeval timeout = {};
+    timeout.tv_sec = timeoutMs / 1000;
+    timeout.tv_usec = (timeoutMs % 1000) * 1000;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+}
+
+// MSG_NOSIGNAL: a client that hung up yields EPIPE instead of killing the process with SIGPIPE.
+int sendString(SocketHandle sock, const std::string& data)
+{
+    return static_cast<int>(send(sock, data.c_str(), data.length(), MSG_NOSIGNAL));
+}
+
+void nameThread(std::thread& thread)
+{
+    pthread_setname_np(thread.native_handle(), "HttpServerLoop");
+}
+#endif
+
+const uintptr_t kInvalidSocket = static_cast<uintptr_t>(INVALID_SOCKET);
+
+} // namespace
 
 namespace httpServer {
 
 HttpServer::HttpServer(std::weak_ptr<IHttpHandler> pHandler)
     : m_pHandler(pHandler)
     , m_bRunning(false)
-    , m_listenSocket(INVALID_SOCKET)
+    , m_listenSocket(kInvalidSocket)
 {
 }
 
@@ -36,22 +138,21 @@ bool HttpServer::start(const HttpServerConfig& config)
     
     m_config = config;
     
-    // Initialize Winsock
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+    if (!startSockets()) {
         return false;
     }
     
     // Create socket
-    m_listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (m_listenSocket == INVALID_SOCKET) {
-        WSACleanup();
+    SocketHandle listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (listenSocket == INVALID_SOCKET) {
+        stopSockets();
         return false;
     }
+    m_listenSocket = static_cast<uintptr_t>(listenSocket);
     
     // Allow address reuse
     int opt = 1;
-    setsockopt(static_cast<SOCKET>(m_listenSocket), SOL_SOCKET, SO_REUSEADDR, 
+    setsockopt(listenSocket, SOL_SOCKET, SO_REUSEADDR,
                reinterpret_cast<const char*>(&opt), sizeof(opt));
     
     // Bind
@@ -60,24 +161,26 @@ bool HttpServer::start(const HttpServerConfig& config)
     serverAddr.sin_port = htons(m_config.port);
     inet_pton(AF_INET, m_config.bindAddress.c_str(), &serverAddr.sin_addr);
     
-    if (bind(static_cast<SOCKET>(m_listenSocket), 
+    if (bind(listenSocket,
              reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR) {
-        closesocket(static_cast<SOCKET>(m_listenSocket));
-        WSACleanup();
+        closeSocket(listenSocket);
+        m_listenSocket = kInvalidSocket;
+        stopSockets();
         return false;
     }
     
     // Listen
-    if (listen(static_cast<SOCKET>(m_listenSocket), m_config.maxConnections) == SOCKET_ERROR) {
-        closesocket(static_cast<SOCKET>(m_listenSocket));
-        WSACleanup();
+    if (listen(listenSocket, m_config.maxConnections) == SOCKET_ERROR) {
+        closeSocket(listenSocket);
+        m_listenSocket = kInvalidSocket;
+        stopSockets();
         return false;
     }
     
     // Start server thread
     m_bRunning = true;
     m_serverThread = std::thread(&HttpServer::serverLoop, this);
-    SetThreadDescription(m_serverThread.native_handle(), L"HttpServerLoop");
+    nameThread(m_serverThread);
     
     return true;
 }
@@ -91,9 +194,9 @@ void HttpServer::stop()
     m_bRunning = false;
     
     // Close listen socket to unblock accept()
-    if (m_listenSocket != INVALID_SOCKET) {
-        closesocket(static_cast<SOCKET>(m_listenSocket));
-        m_listenSocket = INVALID_SOCKET;
+    if (m_listenSocket != kInvalidSocket) {
+        closeListenSocket(static_cast<SocketHandle>(m_listenSocket));
+        m_listenSocket = kInvalidSocket;
     }
     
     // Wait for server thread to finish
@@ -101,7 +204,7 @@ void HttpServer::stop()
         m_serverThread.join();
     }
     
-    WSACleanup();
+    stopSockets();
 }
 
 bool HttpServer::isRunning() const
@@ -128,10 +231,10 @@ void HttpServer::serverLoop()
 {
     while (m_bRunning) {
         sockaddr_in clientAddr = {};
-        int clientAddrLen = sizeof(clientAddr);
+        socklen_t clientAddrLen = sizeof(clientAddr);
         
-        SOCKET clientSocket = accept(
-            static_cast<SOCKET>(m_listenSocket),
+        SocketHandle clientSocket = accept(
+            static_cast<SocketHandle>(m_listenSocket),
             reinterpret_cast<sockaddr*>(&clientAddr),
             &clientAddrLen
         );
@@ -140,10 +243,7 @@ void HttpServer::serverLoop()
             continue;
         }
         
-        // Set receive timeout
-        DWORD timeout = m_config.requestTimeoutMs;
-        setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, 
-                   reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+        setReceiveTimeout(clientSocket, m_config.requestTimeoutMs);
         
         handleClient(static_cast<uintptr_t>(clientSocket));
     }
@@ -151,7 +251,7 @@ void HttpServer::serverLoop()
 
 void HttpServer::handleClient(uintptr_t clientSocket)
 {
-    SOCKET sock = static_cast<SOCKET>(clientSocket);
+    SocketHandle sock = static_cast<SocketHandle>(clientSocket);
     
     // Read request: headers first, then body based on Content-Length
     std::vector<char> buffer(8192);
@@ -213,10 +313,10 @@ void HttpServer::handleClient(uintptr_t clientSocket)
     
     // Send response
     std::string responseStr = response.build();
-    send(sock, responseStr.c_str(), static_cast<int>(responseStr.length()), 0);
+    sendString(sock, responseStr);
     
     // Close connection
-    closesocket(sock);
+    closeSocket(sock);
 }
 
 HttpRequest HttpServer::parseRequest(const std::string& rawRequest)
