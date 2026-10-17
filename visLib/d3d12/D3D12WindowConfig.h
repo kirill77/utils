@@ -29,6 +29,11 @@ struct D3D12CreationOverrides {
 // WindowConfig to backend-specific factories that need D3D12 interposer hooks.
 struct D3D12WindowConfig {
     D3D12CreationOverrides creationOverrides;
+
+    // Create the swap chain with DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT.
+    // IRenderer::waitForFrameStart() then waits on its handle. The maximum frame
+    // latency is left as is.
+    bool latencyWaitable = false;
 };
 
 // D3D12-specific window factory. Returns the concrete D3D12Window type so

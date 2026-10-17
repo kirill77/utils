@@ -9,6 +9,7 @@ namespace visLib {
 
 D3D12Window::D3D12Window(const WindowConfig& config, const D3D12WindowConfig& d3dConfig)
     : m_d3d12Overrides(d3dConfig.creationOverrides)
+    , m_latencyWaitable(d3dConfig.latencyWaitable)
 {
     // Create Win32 window for input
     Win32WindowConfig winConfig;
@@ -159,7 +160,8 @@ bool D3D12Window::initDirectX()
 D3D12SwapChain* D3D12Window::getOrCreateSwapChain()
 {
     if (!m_pSwapChain) {
-        m_pSwapChain = std::make_shared<D3D12SwapChain>(m_device.Get(), m_window->getHandle(), m_dxgiFactory.Get());
+        m_pSwapChain = std::make_shared<D3D12SwapChain>(m_device.Get(), m_window->getHandle(), m_dxgiFactory.Get(),
+                                                       m_latencyWaitable);
         ThrowIfFailed(m_dxgiFactory->MakeWindowAssociation(m_window->getHandle(), DXGI_MWA_NO_ALT_ENTER));
     }
     return m_pSwapChain.get();

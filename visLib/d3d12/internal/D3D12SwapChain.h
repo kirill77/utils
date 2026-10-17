@@ -11,8 +11,11 @@ namespace visLib {
 class D3D12SwapChain
 {
 public:
-    D3D12SwapChain(ID3D12Device* pDevice, HWND hWnd, IDXGIFactory6* pFactory);
+    D3D12SwapChain(ID3D12Device* pDevice, HWND hWnd, IDXGIFactory6* pFactory, bool latencyWaitable);
     ~D3D12SwapChain();
+    // Owns m_frameLatencyWaitable: no copies, or the handle is closed twice
+    D3D12SwapChain(const D3D12SwapChain&) = delete;
+    D3D12SwapChain& operator=(const D3D12SwapChain&) = delete;
 
     // Swap chain access
     IDXGISwapChain4* getSwapChain();
@@ -29,6 +32,10 @@ public:
 
     // Window resize handling
     void notifyWindowResized();
+
+    // Waits on the frame latency waitable object (1 s timeout). Returns at
+    // once when the swap chain was created without the waitable flag.
+    void waitForFrameLatency();
 
     // D3D12Queue access
     std::shared_ptr<D3D12Queue> getQueue() const { return m_pQueue; }
@@ -66,6 +73,12 @@ private:
 
     // Tearing support (needed for VSync-off with flip-model swap chains)
     bool m_tearingSupported = false;
+
+    // Flags used at creation; ResizeBuffers must pass the same ones
+    UINT m_swapChainFlags = 0;
+
+    // From GetFrameLatencyWaitableObject; null without the waitable flag
+    HANDLE m_frameLatencyWaitable = nullptr;
 
     // Back buffer resources
     Microsoft::WRL::ComPtr<ID3D12Resource> m_pBackBuffers[m_backBufferCount];

@@ -47,6 +47,7 @@ private:
     bool m_isOpen = false;
 
     D3D12CreationOverrides m_d3d12Overrides;
+    bool m_latencyWaitable = false;
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;
     Microsoft::WRL::ComPtr<IDXGIFactory6> m_dxgiFactory;
     std::shared_ptr<D3D12SwapChain> m_pSwapChain;

@@ -3,12 +3,13 @@
 #include "D3D12Common.h"
 #include "D3D12SwapChain.h"
 #include "DirectXHelpers.h"
+#include "utils/log/ILog.h"
 #include <dxgi1_6.h>
 #include <stdexcept>
 
 namespace visLib {
 
-D3D12SwapChain::D3D12SwapChain(ID3D12Device* pDevice, HWND hWnd, IDXGIFactory6* pFactory)
+D3D12SwapChain::D3D12SwapChain(ID3D12Device* pDevice, HWND hWnd, IDXGIFactory6* pFactory, bool latencyWaitable)
     : m_pDevice(pDevice), m_hWnd(hWnd)
 {
     // Get descriptor sizes
@@ -72,7 +73,11 @@ D3D12SwapChain::D3D12SwapChain(ID3D12Device* pDevice, HWND hWnd, IDXGIFactory6* 
     swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-    swapChainDesc.Flags = m_tearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
+    if (m_tearingSupported)
+        m_swapChainFlags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+    if (latencyWaitable)
+        m_swapChainFlags |= DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+    swapChainDesc.Flags = m_swapChainFlags;
 
     Microsoft::WRL::ComPtr<IDXGISwapChain1> swapChain1;
     hr = pFactory->CreateSwapChainForHwnd(m_pQueue->getQueue(), m_hWnd, &swapChainDesc, nullptr, nullptr, &swapChain1);
@@ -80,6 +85,11 @@ D3D12SwapChain::D3D12SwapChain(ID3D12Device* pDevice, HWND hWnd, IDXGIFactory6* 
 
     hr = swapChain1.As(&m_pSwapChain);
     if (FAILED(hr)) throw std::runtime_error("Failed to query IDXGISwapChain4");
+
+    if (latencyWaitable) {
+        m_frameLatencyWaitable = m_pSwapChain->GetFrameLatencyWaitableObject();
+        if (!m_frameLatencyWaitable) throw std::runtime_error("GetFrameLatencyWaitableObject returned null");
+    }
 
     // Create back buffer resources
     createBackBufferResources();
@@ -97,6 +107,17 @@ D3D12SwapChain::~D3D12SwapChain()
         m_pQueue->execute(cmdList);
         m_pQueue->flush();
     }
+    if (m_frameLatencyWaitable)
+        CloseHandle(m_frameLatencyWaitable);
+}
+
+void D3D12SwapChain::waitForFrameLatency()
+{
+    if (!m_frameLatencyWaitable)
+        return;
+    // Same timeout as Microsoft's samples: a missed signal costs one second, not a hang.
+    if (WaitForSingleObjectEx(m_frameLatencyWaitable, 1000, TRUE) == WAIT_TIMEOUT)
+        LOG_WARN("Frame latency waitable object not signaled within 1 s");
 }
 
 IDXGISwapChain4* D3D12SwapChain::getSwapChain()
@@ -131,9 +152,9 @@ void D3D12SwapChain::notifyWindowResized()
     UINT width = clientRect.right - clientRect.left;
     UINT height = clientRect.bottom - clientRect.top;
 
-    // Resize swap chain buffers (preserve tearing flag)
-    UINT swapChainFlags = m_tearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
-    HRESULT hr = m_pSwapChain->ResizeBuffers(m_backBufferCount, width, height, DXGI_FORMAT_UNKNOWN, swapChainFlags);
+    // Resize swap chain buffers (same flags as at creation; DXGI rejects
+    // a resize that adds or drops the waitable flag)
+    HRESULT hr = m_pSwapChain->ResizeBuffers(m_backBufferCount, width, height, DXGI_FORMAT_UNKNOWN, m_swapChainFlags);
     if (FAILED(hr)) throw std::runtime_error("Failed to resize swap chain buffers");
 
     // Recreate resources with new size
