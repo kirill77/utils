@@ -41,8 +41,12 @@ public:
     // returns ProcessInfo of the started process with elevation (UAC prompt)
     ProcessInfo startProcessElevated(const std::string& sFullPath, const std::string& sArguments);
     
-    // checks if a process is still running
+    // checks if a process is still running; false as soon as it starts exiting,
+    // even while its DLLs still run their shutdown code
     bool isProcessRunning(const ProcessInfo& processInfo);
+
+    // waits until the process is fully gone; false on timeout or error
+    bool waitForExit(const ProcessInfo& processInfo, uint32_t timeoutMs);
 
     // returns the exit code of a terminated process (UINT32_MAX on failure)
     uint32_t getExitCode(const ProcessInfo& processInfo);
