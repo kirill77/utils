@@ -111,13 +111,16 @@ D3D12SwapChain::~D3D12SwapChain()
         CloseHandle(m_frameLatencyWaitable);
 }
 
-void D3D12SwapChain::waitForFrameLatency()
+bool D3D12SwapChain::waitForFrameLatency()
 {
     if (!m_frameLatencyWaitable)
-        return;
+        return true;
     // Same timeout as Microsoft's samples: a missed signal costs one second, not a hang.
-    if (WaitForSingleObjectEx(m_frameLatencyWaitable, 1000, TRUE) == WAIT_TIMEOUT)
+    if (WaitForSingleObjectEx(m_frameLatencyWaitable, 1000, TRUE) == WAIT_TIMEOUT) {
         LOG_WARN("Frame latency waitable object not signaled within 1 s");
+        return false;
+    }
+    return true;
 }
 
 IDXGISwapChain4* D3D12SwapChain::getSwapChain()

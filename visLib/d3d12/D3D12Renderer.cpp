@@ -308,9 +308,9 @@ std::shared_ptr<IQuery> D3D12Renderer::createQuery(QueryCapability capabilities,
     return std::make_shared<D3D12Query>(m_pWindow->getDevice(), pQueue->getQueue(), capabilities, slotCount);
 }
 
-void D3D12Renderer::waitForFrameStart()
+bool D3D12Renderer::waitForFrameStart()
 {
-    m_pWindow->getOrCreateSwapChain()->waitForFrameLatency();
+    return m_pWindow->getOrCreateSwapChain()->waitForFrameLatency();
 }
 
 box3 D3D12Renderer::render(IQuery* query)

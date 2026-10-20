@@ -40,7 +40,7 @@ public:
     uint64_t getCurrentFrameIndex() const override { return m_frameIndex; }
 
     // Rendering
-    void waitForFrameStart() override;
+    bool waitForFrameStart() override;
     box3 render(IQuery* query = nullptr) override;
     void present() override;
     void flush() override;
