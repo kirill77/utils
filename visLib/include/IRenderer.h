@@ -95,7 +95,8 @@ public:
     // Call at the start of each frame. Blocks until the swap chain can take a
     // new frame when the backend has a frame latency waitable object (D3D12
     // with D3D12WindowConfig::latencyWaitable); otherwise returns at once.
-    virtual void waitForFrameStart() {}
+    // Returns false if the wait timed out.
+    virtual bool waitForFrameStart() { return true; }
 
     // Render the scene, optionally measuring with provided query.
     // Query will have its internal begin/end called automatically.

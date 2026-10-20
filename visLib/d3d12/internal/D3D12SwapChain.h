@@ -35,7 +35,8 @@ public:
 
     // Waits on the frame latency waitable object (1 s timeout). Returns at
     // once when the swap chain was created without the waitable flag.
-    void waitForFrameLatency();
+    // Returns false if the wait timed out.
+    bool waitForFrameLatency();
 
     // D3D12Queue access
     std::shared_ptr<D3D12Queue> getQueue() const { return m_pQueue; }
