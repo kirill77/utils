@@ -15,6 +15,8 @@ struct FrameViewMetrics {
     bool hasTimeInQueue = false;             // true when both source columns were present and computed a mean
     size_t analyzedFrames = 0;               // number of frames analyzed (after skipping warmup + outlier reject)
     size_t droppedOutliers = 0;              // intervals discarded as FrameView garbage (> absolute ceiling)
+    size_t droppedFrames = 0;                // kept rows with Dropped=1 (presented, never displayed)
+    bool hasDroppedColumn = false;           // true when the CSV has the Dropped column
     size_t keptRows = 0;                     // rows actually analyzed from the tail: min(keepLastRows, rows in file).
                                              // < keepLastRows means the capture was shorter than the requested window.
 };
