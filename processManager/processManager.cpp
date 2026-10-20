@@ -80,21 +80,27 @@ bool ProcessManager::killProcess(const ProcessInfo& processInfo) {
         return false;
     }
 
-    // Open the process with termination and synchronization rights
-    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, processInfo.id);
+    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE,
+                                  FALSE, processInfo.id);
     if (hProcess == NULL) {
         DWORD error = GetLastError();
         LOG_ERROR("Failed to open process %u (%s). Error: %lu", processInfo.id, processInfo.imageName.c_str(), error);
         return false;
     }
 
-    // Terminate the process
-    BOOL result = TerminateProcess(hProcess, 1);
-    if (!result) {
+    // Always try the kill, even if the exit code is already set: the exit code
+    // appears when ExitProcess starts, and the kill still works while DLLs run
+    // DLL_PROCESS_DETACH (where a hung DLL would keep the process alive).
+    // Only after that, in the final teardown, does it fail with ERROR_ACCESS_DENIED.
+    bool bKilled = TerminateProcess(hProcess, 1) != FALSE;
+    DWORD exitCode = STILL_ACTIVE;
+    if (!bKilled) {
         DWORD error = GetLastError();
-        CloseHandle(hProcess);
-        LOG_ERROR("Failed to terminate process %u (%s). Error: %lu", processInfo.id, processInfo.imageName.c_str(), error);
-        return false;
+        if (!GetExitCodeProcess(hProcess, &exitCode) || exitCode == STILL_ACTIVE) {
+            CloseHandle(hProcess);
+            LOG_ERROR("Failed to terminate process %u (%s). Error: %lu", processInfo.id, processInfo.imageName.c_str(), error);
+            return false;
+        }
     }
 
     // Wait for the process to fully exit so file handles are released
@@ -102,10 +108,16 @@ bool ProcessManager::killProcess(const ProcessInfo& processInfo) {
     CloseHandle(hProcess);
 
     if (waitResult != WAIT_OBJECT_0) {
-        LOG_WARN("Process %u (%s) terminated but wait timed out", processInfo.id, processInfo.imageName.c_str());
+        LOG_WARN("Process %u (%s) still alive 5 s after kill", processInfo.id, processInfo.imageName.c_str());
+        return false;
     }
 
-    LOG_INFO("Successfully terminated process %u (%s)", processInfo.id, processInfo.imageName.c_str());
+    if (bKilled) {
+        LOG_INFO("Successfully terminated process %u (%s)", processInfo.id, processInfo.imageName.c_str());
+    } else {
+        LOG_INFO("Process %u (%s) had already exited with code %lu; nothing to kill",
+                 processInfo.id, processInfo.imageName.c_str(), exitCode);
+    }
     return true;
 }
 
@@ -274,6 +286,29 @@ bool ProcessManager::isProcessRunning(const ProcessInfo& processInfo) {
 
     // If exit code is STILL_ACTIVE, the process is still running
     return (exitCode == STILL_ACTIVE);
+}
+
+bool ProcessManager::waitForExit(const ProcessInfo& processInfo, uint32_t timeoutMs) {
+    if (!processInfo.isValid()) {
+        return false;
+    }
+
+    // Use stored handle if available, otherwise open by PID
+    HANDLE hProcess = static_cast<HANDLE>(processInfo.handle.get());
+    bool ownedHandle = false;
+    if (!hProcess) {
+        hProcess = OpenProcess(SYNCHRONIZE, FALSE, processInfo.id);
+        if (hProcess == NULL) {
+            return false;
+        }
+        ownedHandle = true;
+    }
+
+    DWORD waitResult = WaitForSingleObject(hProcess, timeoutMs);
+    if (ownedHandle) {
+        CloseHandle(hProcess);
+    }
+    return waitResult == WAIT_OBJECT_0;
 }
 
 uint32_t ProcessManager::getExitCode(const ProcessInfo& processInfo) {
