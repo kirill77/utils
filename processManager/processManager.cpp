@@ -96,7 +96,10 @@ bool ProcessManager::killProcess(const ProcessInfo& processInfo) {
     DWORD exitCode = STILL_ACTIVE;
     if (!bKilled) {
         DWORD error = GetLastError();
-        if (!GetExitCodeProcess(hProcess, &exitCode) || exitCode == STILL_ACTIVE) {
+        // A process that is fully gone counts as exited even if its exit code is 259 (STILL_ACTIVE).
+        bool bGone = WaitForSingleObject(hProcess, 0) == WAIT_OBJECT_0;
+        bool bHasExitCode = GetExitCodeProcess(hProcess, &exitCode) && exitCode != STILL_ACTIVE;
+        if (!bGone && !bHasExitCode) {
             CloseHandle(hProcess);
             LOG_ERROR("Failed to terminate process %u (%s). Error: %lu", processInfo.id, processInfo.imageName.c_str(), error);
             return false;
