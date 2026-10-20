@@ -12,6 +12,8 @@ static const char* const LATENCY_COLUMN_NAME = "MsPCLatency";
 // a real improvement — so we surface TiQ alongside latency for the judge.
 static const char* const UNTIL_DISPLAYED_COLUMN_NAME = "MsUntilDisplayed";
 static const char* const RENDER_PRESENT_COLUMN_NAME = "MsRenderPresentLatency";
+// 1 = the frame was presented but never reached the screen.
+static const char* const DROPPED_COLUMN_NAME = "Dropped";
 
 // Absolute per-sample sanity ceiling for every column read here. FrameView
 // occasionally emits single-frame garbage orders of magnitude beyond physical
@@ -44,12 +46,15 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
     size_t latencyColIndex = headers.size();
     size_t untilDisplayedColIndex = headers.size();
     size_t renderPresentColIndex = headers.size();
+    size_t droppedColIndex = headers.size();
     for (size_t i = 0; i < headers.size(); ++i) {
         if (headers[i] == COLUMN_NAME) colIndex = i;
         else if (headers[i] == LATENCY_COLUMN_NAME) latencyColIndex = i;
         else if (headers[i] == UNTIL_DISPLAYED_COLUMN_NAME) untilDisplayedColIndex = i;
         else if (headers[i] == RENDER_PRESENT_COLUMN_NAME) renderPresentColIndex = i;
+        else if (headers[i] == DROPPED_COLUMN_NAME) droppedColIndex = i;
     }
+    outMetrics.hasDroppedColumn = droppedColIndex < headers.size();
     if (colIndex >= headers.size()) {
         outError = std::string("Column '") + COLUMN_NAME + "' not found in " + csvPath.string();
         return false;
@@ -90,6 +95,10 @@ bool FrameViewAnalyzer::analyze(const std::filesystem::path& csvPath,
         }
         ++rowIndex;
         const size_t idx = frameIdx++;
+
+        if (droppedColIndex < row.size() && row[droppedColIndex] == "1") {
+            ++outMetrics.droppedFrames;
+        }
 
         if (colIndex < row.size() && !row[colIndex].empty()) {
             try {
