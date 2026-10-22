@@ -1,8 +1,22 @@
 #include "HttpRequest.h"
 #include <algorithm>
+#include <cctype>
 #include <sstream>
 
 namespace httpServer {
+
+namespace {
+
+// ASCII lowercase copy. The unsigned char cast keeps std::tolower defined for
+// bytes above 127.
+std::string toLower(std::string s)
+{
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return s;
+}
+
+} // namespace
 
 std::string HttpRequest::getQueryParam(const std::string& key, const std::string& defaultValue) const
 {
@@ -36,13 +50,10 @@ std::string HttpRequest::getQueryParam(const std::string& key, const std::string
 std::string HttpRequest::getHeader(const std::string& key, const std::string& defaultValue) const
 {
     // Case-insensitive header lookup
-    std::string lowerKey = key;
-    std::transform(lowerKey.begin(), lowerKey.end(), lowerKey.begin(), ::tolower);
-    
+    const std::string lowerKey = toLower(key);
+
     for (const auto& [name, value] : headers) {
-        std::string lowerName = name;
-        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
-        if (lowerName == lowerKey) {
+        if (toLower(name) == lowerKey) {
             return value;
         }
     }
