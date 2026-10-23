@@ -8,17 +8,23 @@
 // A flat string key-value map with file I/O.
 //
 // File format (.txt):
+//   // a comment
 //   key=value
 //   key2=value2
 //
-// Blank lines and lines without '=' are ignored on read.
+// Blank lines, lines without '=' and comment lines are ignored on read.
+// A comment line starts with "//" after optional spaces or tabs. Only whole
+// lines are comments: "key=a // b" keeps "a // b" as its value, so URLs and
+// paths are safe. save() and toString() never write comments, so a loaded
+// file's comments are not kept.
 //
 // Escaping (values only):
 //   backslash  -> \\
 //   newline    -> \n
 //   carriage return -> \r
 //
-// Keys must not contain '=' or newlines.
+// Keys must not contain '=' or newlines, and must not start with "//"
+// (save() warns, because such a key would read back as a comment).
 // On read, the first '=' splits key from value.
 
 class StringMap
