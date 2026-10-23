@@ -115,9 +115,25 @@ StringMap StringMap::parseString(const std::string& text)
     return result;
 }
 
+namespace {
+
+// A line whose first non-blank characters are "//" is a comment. Only whole
+// lines count: values are never scanned, so "url=http://x" keeps its "//".
+bool isCommentLine(const std::string& line)
+{
+    const auto first = line.find_first_not_of(" \t");
+    return first != std::string::npos && line.compare(first, 2, "//") == 0;
+}
+
+}  // namespace
+
 void StringMap::writeTo(std::ostream& out) const
 {
     for (const auto& [key, value] : m_data) {
+        // Written as is, but such a line reads back as a comment.
+        if (isCommentLine(key))
+            std::fprintf(stderr, "StringMap: key '%s' starts with '//' and will "
+                                 "read back as a comment\n", key.c_str());
         out << key << '=' << escapeValue(value) << '\n';
     }
 }
@@ -130,6 +146,7 @@ void StringMap::parseFrom(std::istream& in)
         // otherwise be kept in the value (e.g. "vulkan\r"). Real '\r' in a value
         // arrives escaped as "\r", so dropping a bare trailing one is safe.
         if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (isCommentLine(line)) continue;
         auto eq = line.find('=');
         if (eq == std::string::npos) continue;
         std::string key = line.substr(0, eq);
