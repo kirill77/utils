@@ -176,8 +176,9 @@ void VulkanWindow::initVulkan(const VulkanWindowConfig& vkConfig)
         // already set is kept. Not through VK_EXT_layer_settings: an interposer
         // (Streamline) checks requested instance extensions against the driver
         // only, so a layer-provided one fails vkCreateInstance.
-        size_t len = 0;
-        if (getenv_s(&len, nullptr, 0, kMessageLimitEnv) != 0 || len == 0) {
+        // The Win32 environment sees values set by either API; _putenv_s
+        // updates both it and the CRT copy.
+        if (GetEnvironmentVariableA(kMessageLimitEnv, nullptr, 0) == 0) {
             _putenv_s(kMessageLimitEnv, "false");
         }
         fprintf(stderr, "[visLib] Vulkan validation enabled (VK_LAYER_KHRONOS_validation %s).\n",
