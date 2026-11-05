@@ -36,7 +36,11 @@ struct D3D12WindowConfig {
     // latency is left as is.
     bool latencyWaitable = false;
 
-    // Enable the D3D12 debug layer and DXGI debug.
+    // Enable the D3D12 debug layer and DXGI debug. The debug layer is
+    // process-wide: once on, it stays on for every later device, and it is not
+    // turned on (status Failed) when this library already created a device
+    // without it. DXGI messages are process-wide too: have at most one window
+    // with a sink at a time.
     bool enableDebugLayer = false;
     // Gets the layer status and its warnings and errors: D3D12 ones through
     // the info queue message callback when the layer has one, the rest read

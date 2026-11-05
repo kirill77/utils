@@ -3,6 +3,7 @@
 #include "utils/visLib/d3d12/internal/D3D12Common.h"
 #include "D3D12Window.h"
 #include "utils/visLib/d3d12/internal/DirectXHelpers.h"
+#include <atomic>
 #include <stdexcept>
 
 // DXGI_DEBUG_DXGI
@@ -11,6 +12,12 @@
 namespace visLib {
 
 namespace {
+
+// EnableDebugLayer() is process-wide, and enabling it once a device exists
+// removes that device. So it is enabled at most once, and only before the
+// first device this library creates.
+std::atomic<bool> s_debugLayerEnabled{ false };
+std::atomic<bool> s_deviceCreated{ false };
 
 // D3D12_MESSAGE_SEVERITY and DXGI_INFO_QUEUE_MESSAGE_SEVERITY share values:
 // 0 corruption, 1 error, 2 warning, 3 info, 4 message.
@@ -89,9 +96,17 @@ D3D12Window::~D3D12Window()
         m_d3dInfoQueue1.Reset();
     }
     m_d3dInfoQueue.Reset();
-    m_dxgiInfoQueue.Reset();
     m_device.Reset();
     m_dxgiFactory.Reset();
+    // The DXGI queue holds no device reference, so it also sees the release
+    // of the device and factory. Then it is emptied and gets its default cap
+    // back, so the process-wide queue does not grow from window to window.
+    drainValidationMessages();
+    if (m_dxgiInfoQueue) {
+        m_dxgiInfoQueue->ClearStoredMessages(DXGI_DEBUG_DXGI);
+        m_dxgiInfoQueue->SetMessageCountLimit(DXGI_DEBUG_DXGI, DXGI_INFO_QUEUE_DEFAULT_MESSAGE_COUNT_LIMIT);
+        m_dxgiInfoQueue.Reset();
+    }
 }
 
 bool D3D12Window::isOpen() const
@@ -174,10 +189,17 @@ bool D3D12Window::initDirectX()
     // The debug layer must be on before the device is created. It comes from
     // the Windows "Graphics Tools" optional feature (d3d12SDKLayers.dll).
     bool debugLayerOn = false;
-    if (m_enableDebugLayer) {
-        Microsoft::WRL::ComPtr<ID3D12Debug> debugController;
-        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
-            debugController->EnableDebugLayer();
+    Microsoft::WRL::ComPtr<ID3D12Debug> debugController;
+    if (m_enableDebugLayer && !s_debugLayerEnabled && s_deviceCreated) {
+        // Enabling it now would remove the devices that already exist.
+        OutputDebugStringA("[visLib] D3D12 debug layer requested after a device was created without it; not enabled.\n");
+        if (m_pValidationSink) m_pValidationSink->onLayerStatus(ValidationLayerStatus::Failed, "");
+    } else if (m_enableDebugLayer) {
+        if (s_debugLayerEnabled || SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
+            if (!s_debugLayerEnabled) {
+                debugController->EnableDebugLayer();
+                s_debugLayerEnabled = true;
+            }
             debugLayerOn = true;
             // Also shows dxgidebug.dll is there, which the factory debug flag needs.
             Microsoft::WRL::ComPtr<IDXGIInfoQueue> dxgiInfoQueue;
@@ -233,11 +255,15 @@ bool D3D12Window::initDirectX()
         ThrowIfFailed(fnCreateDevice(hardwareAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device)));
     }
 
+    s_deviceCreated = true;
+
     // Without a sink the debug layer's own debugger output is all there is.
     if (debugLayerOn && m_pValidationSink) {
         bool ok = false;
         // Preferred: a callback gets each message on the thread that raised it.
-        // Messages stored before it was registered are read once.
+        // Messages stored before it was registered are read once. Nothing can
+        // raise one in between: this thread has just created the device and
+        // has not handed it to anyone yet.
         if (SUCCEEDED(m_device.As(&m_d3dInfoQueue1))) {
             const UINT64 stored = m_d3dInfoQueue1->GetNumStoredMessagesAllowedByRetrievalFilter();
             if (SUCCEEDED(m_d3dInfoQueue1->RegisterMessageCallback(&onD3D12Message, D3D12_MESSAGE_CALLBACK_FLAG_NONE,
