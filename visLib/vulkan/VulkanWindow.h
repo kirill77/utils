@@ -62,6 +62,9 @@ private:
     // through SL when overrides are present.
     VulkanCreationOverrides m_overrides;
 
+    // Validation output target; outlives the debug messenger (see destructor).
+    std::shared_ptr<IValidationSink> m_pValidationSink;
+
     VkInstance               m_instance        = VK_NULL_HANDLE;
     VkDebugUtilsMessengerEXT m_debugMessenger  = VK_NULL_HANDLE;
     VkSurfaceKHR             m_surface         = VK_NULL_HANDLE;

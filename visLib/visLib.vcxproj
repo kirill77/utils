@@ -165,6 +165,7 @@
     <ClInclude Include="include\IMesh.h" />
     <ClInclude Include="include\InputState.h" />
     <ClInclude Include="include\IRenderer.h" />
+    <ClInclude Include="include\IValidationSink.h" />
     <ClInclude Include="include\IText.h" />
     <ClInclude Include="include\IVisObject.h" />
     <ClInclude Include="include\IWindow.h" />
