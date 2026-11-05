@@ -166,6 +166,8 @@ private:
     // image, not by frame slot: a present may still wait on its semaphore until
     // that image is acquired again.
     std::vector<VkSemaphore>     m_renderFinished;
+    // Present semaphores of earlier swapchains, destroyed with the renderer.
+    std::vector<VkSemaphore>     m_retiredPresentSemaphores;
     std::vector<VkFence>         m_inFlightFences;
     uint32_t m_frameSlot         = 0;
     uint32_t m_currentImageIndex = 0;
