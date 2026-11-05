@@ -256,7 +256,9 @@ void VulkanRenderer::createPresentSemaphores()
 void VulkanRenderer::destroyPresentSemaphores()
 {
     for (auto s : m_renderFinished) if (s) vkDestroySemaphore(m_device, s, nullptr);
+    for (auto s : m_retiredPresentSemaphores) if (s) vkDestroySemaphore(m_device, s, nullptr);
     m_renderFinished.clear();
+    m_retiredPresentSemaphores.clear();
 }
 
 void VulkanRenderer::destroyFrameResources()
@@ -1058,15 +1060,19 @@ void VulkanRenderer::recreateSwapchain()
         if (fb) vkDestroyFramebuffer(m_device, fb, nullptr);
     }
     m_framebuffers.clear();
-    // The device is idle, so no present waits on them any more.
-    destroyPresentSemaphores();
+    // vkDeviceWaitIdle does not cover the presentation engine's semaphore
+    // waits, so the old present semaphores are kept until the renderer is
+    // destroyed rather than destroyed now.
+    m_retiredPresentSemaphores.insert(m_retiredPresentSemaphores.end(),
+                                      m_renderFinished.begin(), m_renderFinished.end());
+    m_renderFinished.clear();
 
     m_pSwapchain->recreate(m_config.vsyncInterval);
 
     // Depth resources are sized to the (unchanged) extent and the render pass
     // references the (unchanged) surface format, so only the framebuffers —
     // which bind the new swapchain image views — and the per-image present
-    // semaphores need rebuilding.
+    // semaphores (a new set) need rebuilding.
     createFramebuffers();
     createPresentSemaphores();
 }
