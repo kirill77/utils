@@ -5,11 +5,53 @@
 #include "utils/visLib/d3d12/internal/DirectXHelpers.h"
 #include <stdexcept>
 
+// DXGI_DEBUG_DXGI
+#pragma comment(lib, "dxguid.lib")
+
 namespace visLib {
+
+namespace {
+
+// D3D12_MESSAGE_SEVERITY and DXGI_INFO_QUEUE_MESSAGE_SEVERITY share values:
+// 0 corruption, 1 error, 2 warning, 3 info, 4 message.
+void reportValidationMessage(IValidationSink& sink, int severity, const std::string& id, const char* pText)
+{
+    if (severity > D3D12_MESSAGE_SEVERITY_WARNING) return;
+    sink.onMessage(severity == D3D12_MESSAGE_SEVERITY_WARNING ? ValidationSeverity::Warning
+                                                              : ValidationSeverity::Error,
+                   id.c_str(), pText ? pText : "");
+}
+
+// Runs on the thread that raised the message. pContext is the window's sink;
+// the window unregisters the callback before it drops the sink.
+void __stdcall onD3D12Message(D3D12_MESSAGE_CATEGORY, D3D12_MESSAGE_SEVERITY severity,
+                              D3D12_MESSAGE_ID id, LPCSTR pDescription, void* pContext)
+{
+    reportValidationMessage(*static_cast<IValidationSink*>(pContext), severity,
+                            "D3D12-" + std::to_string(id), pDescription);
+}
+
+// Reports stored messages [read, end) and advances read.
+void readD3D12Messages(ID3D12InfoQueue& queue, UINT64& read, UINT64 end, IValidationSink& sink)
+{
+    std::vector<char> buf;
+    for (; read < end; ++read) {
+        SIZE_T size = 0;
+        if (FAILED(queue.GetMessage(read, nullptr, &size)) || size == 0) continue;
+        buf.resize(size);
+        auto* pMsg = reinterpret_cast<D3D12_MESSAGE*>(buf.data());
+        if (FAILED(queue.GetMessage(read, pMsg, &size))) continue;
+        reportValidationMessage(sink, pMsg->Severity, "D3D12-" + std::to_string(pMsg->ID), pMsg->pDescription);
+    }
+}
+
+} // namespace
 
 D3D12Window::D3D12Window(const WindowConfig& config, const D3D12WindowConfig& d3dConfig)
     : m_d3d12Overrides(d3dConfig.creationOverrides)
     , m_latencyWaitable(d3dConfig.latencyWaitable)
+    , m_enableDebugLayer(d3dConfig.enableDebugLayer)
+    , m_pValidationSink(d3dConfig.pValidationSink)
 {
     // Create Win32 window for input
     Win32WindowConfig winConfig;
@@ -41,6 +83,13 @@ D3D12Window::~D3D12Window()
 {
     // Release DirectX resources before window is destroyed
     m_pSwapChain.reset();
+    drainValidationMessages();
+    if (m_d3dInfoQueue1) {
+        m_d3dInfoQueue1->UnregisterMessageCallback(m_d3dCallbackCookie);
+        m_d3dInfoQueue1.Reset();
+    }
+    m_d3dInfoQueue.Reset();
+    m_dxgiInfoQueue.Reset();
     m_device.Reset();
     m_dxgiFactory.Reset();
 }
@@ -73,6 +122,29 @@ void D3D12Window::resize(uint32_t width, uint32_t height)
 void D3D12Window::processEvents()
 {
     m_window->processMessages();
+    drainValidationMessages();
+}
+
+void D3D12Window::drainValidationMessages()
+{
+    if (!m_pValidationSink) return;
+    if (m_d3dInfoQueue) {
+        readD3D12Messages(*m_d3dInfoQueue.Get(), m_d3dRead,
+                          m_d3dInfoQueue->GetNumStoredMessagesAllowedByRetrievalFilter(), *m_pValidationSink);
+    }
+    if (m_dxgiInfoQueue) {
+        std::vector<char> buf;
+        const UINT64 count = m_dxgiInfoQueue->GetNumStoredMessagesAllowedByRetrievalFilters(DXGI_DEBUG_DXGI);
+        for (; m_dxgiRead < count; ++m_dxgiRead) {
+            SIZE_T size = 0;
+            if (FAILED(m_dxgiInfoQueue->GetMessage(DXGI_DEBUG_DXGI, m_dxgiRead, nullptr, &size)) || size == 0) continue;
+            buf.resize(size);
+            auto* pMsg = reinterpret_cast<DXGI_INFO_QUEUE_MESSAGE*>(buf.data());
+            if (FAILED(m_dxgiInfoQueue->GetMessage(DXGI_DEBUG_DXGI, m_dxgiRead, pMsg, &size))) continue;
+            reportValidationMessage(*m_pValidationSink, pMsg->Severity,
+                                    "DXGI-" + std::to_string(pMsg->ID), pMsg->pDescription);
+        }
+    }
 }
 
 const InputState& D3D12Window::getInputState() const
@@ -99,14 +171,30 @@ bool D3D12Window::initDirectX()
 {
     UINT dxgiFactoryFlags = 0;
 
-#ifdef _DEBUG
-    // Enable debug layer
-    Microsoft::WRL::ComPtr<ID3D12Debug> debugController;
-    if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
-        debugController->EnableDebugLayer();
-        dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
+    // The debug layer must be on before the device is created. It comes from
+    // the Windows "Graphics Tools" optional feature (d3d12SDKLayers.dll).
+    bool debugLayerOn = false;
+    if (m_enableDebugLayer) {
+        Microsoft::WRL::ComPtr<ID3D12Debug> debugController;
+        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
+            debugController->EnableDebugLayer();
+            debugLayerOn = true;
+            // Also shows dxgidebug.dll is there, which the factory debug flag needs.
+            Microsoft::WRL::ComPtr<IDXGIInfoQueue> dxgiInfoQueue;
+            if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiInfoQueue)))) {
+                dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
+                if (m_pValidationSink) {
+                    dxgiInfoQueue->SetMessageCountLimit(DXGI_DEBUG_DXGI, UINT64(-1));
+                    // The DXGI queue is per process: an earlier window already
+                    // reported what is stored.
+                    m_dxgiRead = dxgiInfoQueue->GetNumStoredMessagesAllowedByRetrievalFilters(DXGI_DEBUG_DXGI);
+                    m_dxgiInfoQueue = dxgiInfoQueue;
+                }
+            }
+        } else if (m_pValidationSink) {
+            m_pValidationSink->onLayerStatus(ValidationLayerStatus::Missing, "");
+        }
     }
-#endif
 
     // Create DXGI factory -- use interposer override if provided
     auto fnCreateFactory = m_d3d12Overrides.pfnCreateDXGIFactory2
@@ -145,14 +233,30 @@ bool D3D12Window::initDirectX()
         ThrowIfFailed(fnCreateDevice(hardwareAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device)));
     }
 
-#ifdef _DEBUG
-    // Break into debugger on D3D12 validation errors
-    Microsoft::WRL::ComPtr<ID3D12InfoQueue> infoQueue;
-    if (SUCCEEDED(m_device.As(&infoQueue))) {
-        infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
-        infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+    // Without a sink the debug layer's own debugger output is all there is.
+    if (debugLayerOn && m_pValidationSink) {
+        bool ok = false;
+        // Preferred: a callback gets each message on the thread that raised it.
+        // Messages stored before it was registered are read once.
+        if (SUCCEEDED(m_device.As(&m_d3dInfoQueue1))) {
+            const UINT64 stored = m_d3dInfoQueue1->GetNumStoredMessagesAllowedByRetrievalFilter();
+            if (SUCCEEDED(m_d3dInfoQueue1->RegisterMessageCallback(&onD3D12Message, D3D12_MESSAGE_CALLBACK_FLAG_NONE,
+                                                                   m_pValidationSink.get(), &m_d3dCallbackCookie))) {
+                UINT64 read = 0;
+                readD3D12Messages(*m_d3dInfoQueue1.Get(), read, stored, *m_pValidationSink);
+                ok = true;
+            } else {
+                m_d3dInfoQueue1.Reset();
+            }
+        }
+        // Older debug layers: poll every processEvents(). Nothing is cleared,
+        // so the queue must not drop messages.
+        if (!ok && SUCCEEDED(m_device.As(&m_d3dInfoQueue))) {
+            m_d3dInfoQueue->SetMessageCountLimit(UINT64(-1));
+            ok = true;
+        }
+        m_pValidationSink->onLayerStatus(ok ? ValidationLayerStatus::Active : ValidationLayerStatus::Failed, "");
     }
-#endif
 
     return true;
 }

@@ -9,6 +9,7 @@
 #include <memory>
 
 #include "utils/visLib/include/IWindow.h"
+#include "utils/visLib/include/IValidationSink.h"
 
 namespace visLib {
 
@@ -34,6 +35,14 @@ struct D3D12WindowConfig {
     // IRenderer::waitForFrameStart() then waits on its handle. The maximum frame
     // latency is left as is.
     bool latencyWaitable = false;
+
+    // Enable the D3D12 debug layer and DXGI debug.
+    bool enableDebugLayer = false;
+    // Gets the layer status and its warnings and errors: D3D12 ones through
+    // the info queue message callback when the layer has one, the rest read
+    // from the info queues each processEvents() and when the window is
+    // destroyed. Without a sink only the layer's own debugger output shows them.
+    std::shared_ptr<IValidationSink> pValidationSink;
 };
 
 // D3D12-specific window factory. Returns the concrete D3D12Window type so

@@ -24,7 +24,6 @@ enum class DepthTest {
 
 // Renderer configuration
 struct RendererConfig {
-    bool enableDebugLayer = false;      // Enable graphics API debug validation
     bool wireframeMode = true;          // Render in wireframe (default for scientific vis)
     float4 clearColor = { 0.0f, 0.2f, 0.4f, 1.0f };  // Background color
     

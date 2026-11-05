@@ -40,25 +40,49 @@ uint32_t instanceLayerSpecVersion(const char* name)
     return 0;
 }
 
+// pUserData is the window's IValidationSink (or null). The window keeps the
+// sink alive until the messenger and the instance are destroyed.
 VKAPI_ATTR VkBool32 VKAPI_CALL debugMessengerCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     VkDebugUtilsMessageTypeFlagsEXT /*type*/,
     const VkDebugUtilsMessengerCallbackDataEXT* pData,
-    void* /*userData*/)
+    void* pUserData)
 {
-    if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-        char buf[1024];
-        _snprintf_s(buf, sizeof(buf), _TRUNCATE,
-                    "[VK] %s\n", pData->pMessage ? pData->pMessage : "(null)");
-        OutputDebugStringA(buf);
+    if (severity < VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+        return VK_FALSE;
     }
+    const char* pText = pData->pMessage ? pData->pMessage : "";
+    auto* pSink = static_cast<IValidationSink*>(pUserData);
+    if (!pSink) {
+        char buf[1024];
+        _snprintf_s(buf, sizeof(buf), _TRUNCATE, "[VK] %s\n", pText);
+        OutputDebugStringA(buf);
+        return VK_FALSE;
+    }
+    // Message name (a VUID for most validation messages), else the ID number.
+    char idBuf[32];
+    const char* pId = pData->pMessageIdName;
+    if (!pId || !*pId) {
+        _snprintf_s(idBuf, sizeof(idBuf), _TRUNCATE, "0x%08x", static_cast<uint32_t>(pData->messageIdNumber));
+        pId = idBuf;
+    }
+    pSink->onMessage(severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT
+                         ? ValidationSeverity::Error : ValidationSeverity::Warning,
+                     pId, pText);
     return VK_FALSE;
+}
+
+std::string versionString(uint32_t v)
+{
+    return std::to_string(VK_API_VERSION_MAJOR(v)) + "." + std::to_string(VK_API_VERSION_MINOR(v)) +
+           "." + std::to_string(VK_API_VERSION_PATCH(v));
 }
 
 } // namespace
 
 VulkanWindow::VulkanWindow(const WindowConfig& config, const VulkanWindowConfig& vkConfig)
     : m_overrides(vkConfig.creationOverrides)
+    , m_pValidationSink(vkConfig.pValidationSink)
 {
     Win32WindowConfig winConfig;
     winConfig.title = config.title;
@@ -134,22 +158,38 @@ void VulkanWindow::initVulkan(const VulkanWindowConfig& vkConfig)
     bool wantDebugUtils = false;
     const uint32_t valLayerVer =
         vkConfig.enableValidation ? instanceLayerSpecVersion(kKhronosValidationLayer) : 0;
+    const std::string valLayerVerStr = valLayerVer ? versionString(valLayerVer) : "";
+    auto reportStatus = [&](ValidationLayerStatus status) {
+        if (m_pValidationSink) m_pValidationSink->onLayerStatus(status, valLayerVerStr.c_str());
+    };
     if (vkConfig.enableValidation && valLayerVer >= kMinValidationLayerSpecVersion) {
         instanceLayers.push_back(kKhronosValidationLayer);
         instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         wantDebugUtils = true;
-        fprintf(stderr, "[visLib] Vulkan validation enabled (VK_LAYER_KHRONOS_validation %u.%u.%u).\n",
-                VK_API_VERSION_MAJOR(valLayerVer), VK_API_VERSION_MINOR(valLayerVer), VK_API_VERSION_PATCH(valLayerVer));
+        fprintf(stderr, "[visLib] Vulkan validation enabled (VK_LAYER_KHRONOS_validation %s).\n",
+                valLayerVerStr.c_str());
     } else if (vkConfig.enableValidation && valLayerVer == 0) {
         fprintf(stderr, "[visLib] Vulkan validation requested but VK_LAYER_KHRONOS_validation not found; continuing without it.\n");
+        reportStatus(ValidationLayerStatus::Missing);
     } else if (vkConfig.enableValidation) {
         fprintf(stderr,
-                "[visLib] Skipping VK_LAYER_KHRONOS_validation: layer %u.%u.%u is older than required %u.%u.%u. "
+                "[visLib] Skipping VK_LAYER_KHRONOS_validation: layer %s is older than required %s. "
                 "Older layers mishandle DLSS-G's VK_NVX_binary_import rev2 pNext and crash Frame Generation; "
                 "install Vulkan SDK >= 1.4.x to enable validation.\n",
-                VK_API_VERSION_MAJOR(valLayerVer), VK_API_VERSION_MINOR(valLayerVer), VK_API_VERSION_PATCH(valLayerVer),
-                VK_API_VERSION_MAJOR(kMinValidationLayerSpecVersion), VK_API_VERSION_MINOR(kMinValidationLayerSpecVersion), VK_API_VERSION_PATCH(kMinValidationLayerSpecVersion));
+                valLayerVerStr.c_str(), versionString(kMinValidationLayerSpecVersion).c_str());
+        reportStatus(ValidationLayerStatus::TooOld);
     }
+
+    // Chained onto the instance create info too, so messages from
+    // vkCreateInstance and vkDestroyInstance are caught.
+    VkDebugUtilsMessengerCreateInfoEXT messengerInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
+    messengerInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
+                                  | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    messengerInfo.messageType     = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
+                                  | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
+                                  | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    messengerInfo.pfnUserCallback = &debugMessengerCallback;
+    messengerInfo.pUserData       = m_pValidationSink.get();
 
     VkApplicationInfo appInfo = { VK_STRUCTURE_TYPE_APPLICATION_INFO };
     appInfo.pApplicationName   = "visLib";
@@ -164,6 +204,9 @@ void VulkanWindow::initVulkan(const VulkanWindowConfig& vkConfig)
     instInfo.ppEnabledLayerNames     = instanceLayers.data();
     instInfo.enabledExtensionCount   = static_cast<uint32_t>(instanceExtensions.size());
     instInfo.ppEnabledExtensionNames = instanceExtensions.data();
+    if (wantDebugUtils) {
+        instInfo.pNext = &messengerInfo;
+    }
 
     // Route through the SL proxy if provided so SL installs its dispatch
     // tables in the resulting VkInstance; the per-handle dispatch design of
@@ -179,16 +222,11 @@ void VulkanWindow::initVulkan(const VulkanWindowConfig& vkConfig)
     if (wantDebugUtils) {
         auto pfn = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
             vkGetInstanceProcAddr(m_instance, "vkCreateDebugUtilsMessengerEXT"));
-        if (pfn) {
-            VkDebugUtilsMessengerCreateInfoEXT mi = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
-            mi.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
-                               | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-            mi.messageType     = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
-                               | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
-                               | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-            mi.pfnUserCallback = &debugMessengerCallback;
-            pfn(m_instance, &mi, nullptr, &m_debugMessenger);
+        const bool ok = pfn && pfn(m_instance, &messengerInfo, nullptr, &m_debugMessenger) == VK_SUCCESS;
+        if (!ok) {
+            fprintf(stderr, "[visLib] vkCreateDebugUtilsMessengerEXT failed; validation messages are not captured.\n");
         }
+        reportStatus(ok ? ValidationLayerStatus::Active : ValidationLayerStatus::Failed);
     }
 
     // --- Surface ---

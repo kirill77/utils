@@ -3,6 +3,7 @@
 #ifdef _WIN32
 
 #include "utils/visLib/include/IWindow.h"
+#include "utils/visLib/include/IValidationSink.h"
 #include "utils/visLib/vulkan/internal/VulkanCommon.h"
 #include <memory>
 
@@ -49,12 +50,10 @@ struct VulkanCreationOverrides {
 // WindowConfig to the Vulkan backend factory.
 struct VulkanWindowConfig {
     // Enable VK_LAYER_KHRONOS_validation and a debug-utils messenger.
-    // Defaults to true under _DEBUG, false otherwise.
-#ifdef _DEBUG
-    bool enableValidation = true;
-#else
     bool enableValidation = false;
-#endif
+    // Gets the layer status and its warnings and errors. Without a sink they
+    // go to OutputDebugString.
+    std::shared_ptr<IValidationSink> pValidationSink;
 
     VulkanCreationOverrides creationOverrides;
 };
