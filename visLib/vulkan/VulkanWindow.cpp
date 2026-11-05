@@ -40,6 +40,19 @@ uint32_t instanceLayerSpecVersion(const char* name)
     return 0;
 }
 
+// True if the named layer provides the named instance extension.
+bool layerHasExtension(const char* layer, const char* extension)
+{
+    uint32_t count = 0;
+    vkEnumerateInstanceExtensionProperties(layer, &count, nullptr);
+    std::vector<VkExtensionProperties> exts(count);
+    vkEnumerateInstanceExtensionProperties(layer, &count, exts.data());
+    for (const auto& e : exts) {
+        if (strcmp(e.extensionName, extension) == 0) return true;
+    }
+    return false;
+}
+
 // pUserData is the window's IValidationSink (or null). The window keeps the
 // sink alive until the messenger and the instance are destroyed.
 VKAPI_ATTR VkBool32 VKAPI_CALL debugMessengerCallback(
@@ -156,6 +169,7 @@ void VulkanWindow::initVulkan(const VulkanWindowConfig& vkConfig)
 
     std::vector<const char*> instanceLayers;
     bool wantDebugUtils = false;
+    bool wantLayerSettings = false;
     const uint32_t valLayerVer =
         vkConfig.enableValidation ? instanceLayerSpecVersion(kKhronosValidationLayer) : 0;
     const std::string valLayerVerStr = valLayerVer ? versionString(valLayerVer) : "";
@@ -166,6 +180,13 @@ void VulkanWindow::initVulkan(const VulkanWindowConfig& vkConfig)
         instanceLayers.push_back(kKhronosValidationLayer);
         instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         wantDebugUtils = true;
+        wantLayerSettings = layerHasExtension(kKhronosValidationLayer, VK_EXT_LAYER_SETTINGS_EXTENSION_NAME);
+        if (wantLayerSettings) {
+            instanceExtensions.push_back(VK_EXT_LAYER_SETTINGS_EXTENSION_NAME);
+        } else {
+            fprintf(stderr, "[visLib] VK_LAYER_KHRONOS_validation has no VK_EXT_layer_settings; "
+                            "it reports each message ID at most 10 times.\n");
+        }
         fprintf(stderr, "[visLib] Vulkan validation enabled (VK_LAYER_KHRONOS_validation %s).\n",
                 valLayerVerStr.c_str());
     } else if (vkConfig.enableValidation && valLayerVer == 0) {
@@ -191,6 +212,21 @@ void VulkanWindow::initVulkan(const VulkanWindowConfig& vkConfig)
     messengerInfo.pfnUserCallback = &debugMessengerCallback;
     messengerInfo.pUserData       = m_pValidationSink.get();
 
+    // By default the layer stops reporting a message ID after 10 times (and
+    // reports that as one more message), so a per-frame error and a rare one
+    // look the same. Turn that limit off: every message reaches the sink.
+    const VkBool32 messageLimitOff = VK_FALSE;
+    VkLayerSettingEXT messageLimit = {};
+    messageLimit.pLayerName   = kKhronosValidationLayer;
+    messageLimit.pSettingName = "enable_message_limit";
+    messageLimit.type         = VK_LAYER_SETTING_TYPE_BOOL32_EXT;
+    messageLimit.valueCount   = 1;
+    messageLimit.pValues      = &messageLimitOff;
+    VkLayerSettingsCreateInfoEXT layerSettings = { VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT };
+    layerSettings.settingCount = 1;
+    layerSettings.pSettings    = &messageLimit;
+    layerSettings.pNext        = &messengerInfo;
+
     VkApplicationInfo appInfo = { VK_STRUCTURE_TYPE_APPLICATION_INFO };
     appInfo.pApplicationName   = "visLib";
     appInfo.applicationVersion = 1;
@@ -204,7 +240,9 @@ void VulkanWindow::initVulkan(const VulkanWindowConfig& vkConfig)
     instInfo.ppEnabledLayerNames     = instanceLayers.data();
     instInfo.enabledExtensionCount   = static_cast<uint32_t>(instanceExtensions.size());
     instInfo.ppEnabledExtensionNames = instanceExtensions.data();
-    if (wantDebugUtils) {
+    if (wantLayerSettings) {
+        instInfo.pNext = &layerSettings;   // chains on to messengerInfo
+    } else if (wantDebugUtils) {
         instInfo.pNext = &messengerInfo;
     }
 
