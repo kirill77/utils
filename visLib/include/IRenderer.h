@@ -43,6 +43,12 @@ struct RendererConfig {
     // this flag.
     bool enableLl2SubmitIds = false;
 
+    // Vulkan-only: re-use the present semaphore inside the frame, as some games
+    // do. Each frame does two submits on the same queue: the first does the work
+    // and signals the present semaphore; the second (no command buffers) waits
+    // on it and signals it again; the present waits on it. D3D12 ignores this.
+    bool presentSemaphoreReuse = false;
+
     // Text to encode as a QR code pattern (Version 1, max 20 alphanumeric chars)
     // Used by QRCodePixelShader
     std::string qrCodeText = "VERDICT";

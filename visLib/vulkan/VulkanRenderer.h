@@ -88,6 +88,8 @@ private:
     void createDepthResources();
     void destroyDepthResources();
     void createFramebuffers();
+    void createPresentSemaphores();   // m_renderFinished, one per swapchain image
+    void destroyPresentSemaphores();
     void createDescriptorResources();
     void createUniformBuffers();
     void createMeshPipeline();
@@ -160,6 +162,9 @@ private:
     VkCommandPool                m_commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> m_commandBuffers;
     std::vector<VkSemaphore>     m_imageAvailable;
+    // Present semaphores, one per swapchain image and indexed by the acquired
+    // image, not by frame slot: a present may still wait on its semaphore until
+    // that image is acquired again.
     std::vector<VkSemaphore>     m_renderFinished;
     std::vector<VkFence>         m_inFlightFences;
     uint32_t m_frameSlot         = 0;
