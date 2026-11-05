@@ -181,6 +181,7 @@ VulkanRenderer::VulkanRenderer(VulkanWindow* pWindow, const RendererConfig& conf
     createRenderPass();
     createDepthResources();
     createFramebuffers();
+    createPresentSemaphores();
     createDescriptorResources();
     createUniformBuffers();
     createMeshPipeline();
@@ -229,28 +230,42 @@ void VulkanRenderer::initFrameResources()
     }
 
     m_imageAvailable.resize(kFramesInFlight);
-    m_renderFinished.resize(kFramesInFlight);
     m_inFlightFences.resize(kFramesInFlight);
     VkSemaphoreCreateInfo si = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
     VkFenceCreateInfo fi = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
     fi.flags = VK_FENCE_CREATE_SIGNALED_BIT;
     for (uint32_t i = 0; i < kFramesInFlight; ++i) {
         if (vkCreateSemaphore(m_device, &si, nullptr, &m_imageAvailable[i]) != VK_SUCCESS ||
-            vkCreateSemaphore(m_device, &si, nullptr, &m_renderFinished[i]) != VK_SUCCESS ||
             vkCreateFence    (m_device, &fi, nullptr, &m_inFlightFences[i]) != VK_SUCCESS) {
             throw std::runtime_error("Per-frame sync primitive creation failed");
         }
     }
 }
 
+void VulkanRenderer::createPresentSemaphores()
+{
+    VkSemaphoreCreateInfo si = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+    m_renderFinished.resize(m_pSwapchain->getImageCount());
+    for (auto& s : m_renderFinished) {
+        if (vkCreateSemaphore(m_device, &si, nullptr, &s) != VK_SUCCESS) {
+            throw std::runtime_error("Present semaphore creation failed");
+        }
+    }
+}
+
+void VulkanRenderer::destroyPresentSemaphores()
+{
+    for (auto s : m_renderFinished) if (s) vkDestroySemaphore(m_device, s, nullptr);
+    m_renderFinished.clear();
+}
+
 void VulkanRenderer::destroyFrameResources()
 {
     for (auto s : m_imageAvailable) if (s) vkDestroySemaphore(m_device, s, nullptr);
-    for (auto s : m_renderFinished) if (s) vkDestroySemaphore(m_device, s, nullptr);
     for (auto f : m_inFlightFences) if (f) vkDestroyFence    (m_device, f, nullptr);
     m_imageAvailable.clear();
-    m_renderFinished.clear();
     m_inFlightFences.clear();
+    destroyPresentSemaphores();
     if (m_commandPool) { vkDestroyCommandPool(m_device, m_commandPool, nullptr); m_commandPool = VK_NULL_HANDLE; }
     m_commandBuffers.clear();
 }
@@ -935,7 +950,7 @@ box3 VulkanRenderer::render(IQuery* query)
     cmdInfo.commandBuffer = cmd;
 
     VkSemaphoreSubmitInfo signalSem = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
-    signalSem.semaphore = m_renderFinished[m_frameSlot];
+    signalSem.semaphore = m_renderFinished[m_currentImageIndex];
     // Signal once all work completes, matching v1's "signal at end of submit"
     // semantics that the present's wait relied on.
     signalSem.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
@@ -950,7 +965,8 @@ box3 VulkanRenderer::render(IQuery* query)
 
     // LL2 explicit attribution: chaining VkLatencySubmissionPresentIdNV here puts
     // the device into explicit mode and attributes this submit to our app frame
-    // id. One app submit per frame, so one tag per frame; SL's FG plugin reuses
+    // id. Every submit of a frame carries the same id (one, or two with
+    // presentSemaphoreReuse); SL's FG plugin reuses
     // the same id across the generated presents of the batch. No VkPresentIdKHR
     // is needed — the Reflex path ignores it. Chained whenever VK_NV_low_latency2
     // is advertised.
@@ -965,8 +981,32 @@ box3 VulkanRenderer::render(IQuery* query)
         submit.pNext   = &llId;
     }
 
-    if (vkQueueSubmit2(m_queue, 1, &submit, m_inFlightFences[m_frameSlot]) != VK_SUCCESS) {
-        throw std::runtime_error("vkQueueSubmit2 failed");
+    if (!m_config.presentSemaphoreReuse) {
+        if (vkQueueSubmit2(m_queue, 1, &submit, m_inFlightFences[m_frameSlot]) != VK_SUCCESS) {
+            throw std::runtime_error("vkQueueSubmit2 failed");
+        }
+    } else {
+        // Present semaphore re-use: the work submit above signals it, then a
+        // second submit with no command buffers waits on it and signals it
+        // again, and the present waits on that second signal. Valid Vulkan:
+        // signal, wait, signal, wait on one queue. The in-flight fence goes on
+        // the second submit, so it still covers the whole frame.
+        VkSemaphoreSubmitInfo relinkWait = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
+        relinkWait.semaphore = m_renderFinished[m_currentImageIndex];
+        relinkWait.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+
+        VkSubmitInfo2 relink = { VK_STRUCTURE_TYPE_SUBMIT_INFO_2 };
+        relink.waitSemaphoreInfoCount   = 1;
+        relink.pWaitSemaphoreInfos      = &relinkWait;
+        relink.signalSemaphoreInfoCount = 1;
+        relink.pSignalSemaphoreInfos    = &signalSem;
+        relink.pNext                    = submit.pNext;   // same LL2 frame id
+
+        // Two separate calls, as the games that do this make them.
+        if (vkQueueSubmit2(m_queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
+            vkQueueSubmit2(m_queue, 1, &relink, m_inFlightFences[m_frameSlot]) != VK_SUCCESS) {
+            throw std::runtime_error("vkQueueSubmit2 failed");
+        }
     }
 
     if (!hasBounds) {
@@ -978,7 +1018,7 @@ box3 VulkanRenderer::render(IQuery* query)
 
 void VulkanRenderer::present()
 {
-    m_pSwapchain->present(m_queue, m_currentImageIndex, m_renderFinished[m_frameSlot]);
+    m_pSwapchain->present(m_queue, m_currentImageIndex, m_renderFinished[m_currentImageIndex]);
     m_frameIndex++;
     m_frameSlot = (m_frameSlot + 1) % kFramesInFlight;
 }
@@ -1018,13 +1058,17 @@ void VulkanRenderer::recreateSwapchain()
         if (fb) vkDestroyFramebuffer(m_device, fb, nullptr);
     }
     m_framebuffers.clear();
+    // The device is idle, so no present waits on them any more.
+    destroyPresentSemaphores();
 
     m_pSwapchain->recreate(m_config.vsyncInterval);
 
     // Depth resources are sized to the (unchanged) extent and the render pass
     // references the (unchanged) surface format, so only the framebuffers —
-    // which bind the new swapchain image views — need rebuilding.
+    // which bind the new swapchain image views — and the per-image present
+    // semaphores need rebuilding.
     createFramebuffers();
+    createPresentSemaphores();
 }
 
 std::shared_ptr<IMesh> VulkanRenderer::createMesh()
